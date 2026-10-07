@@ -1,20 +1,26 @@
 # Face ID
 
-An iPhone-first web demo of the iOS Face ID animation, hosted on GitHub Pages.
+An iPhone-first web demo: an iOS-style Face ID unlock that opens into a banking app. Hosted on GitHub Pages.
 
 **Live:** https://izu83.github.io/Face-ID/
 
-## Demo
+## Face ID
 
 - A Dynamic Island–style pill drops down from the top and grows into the Face ID square
-- The Face ID glyph does a small head turn
-- The corner brackets bend into a spinning ring while it "scans"
-- The ring closes and collapses into a checkmark
-- The Face ID box turns into the green badge and glides into the **Successful** screen
-- All motion uses spring physics, like iOS
+- The glyph does a small head turn, then the brackets swirl into a spinning ring
+- The ring closes and folds into a checkmark, then tucks back up into the island
 - Authentication always succeeds for now (`authenticate()` in `index.html`)
 
-Use **Try again** to replay it.
+## Bank app (demo data)
+
+- Balance with rolling digits and a hide/show eye button
+- Debit card with a shine sweep; tap it to flip
+- Quick actions, weekly spending bars, recent activity list
+- Tap a transaction for an iOS-style detail sheet (drag down or tap ✕ to close)
+- Lock button returns to Face ID
+
+All animation uses spring curves baked into GPU keyframe animations (transform/opacity only), so it runs at full frame rate on iPhone.
+
 On iPhone, use Safari → Share → **Add to Home Screen** to run it fullscreen with its own icon.
 
 ## Run locally
