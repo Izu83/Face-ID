@@ -587,6 +587,7 @@
   function showAuth(name) {
     if (name === 'login') prepareLogin();
     setView(name);
+    auth.classList.remove('leaving');
     auth.classList.add('on');
     spring(auth, v => ({ opacity: clamp(v * 1.4) }), { response: 0.5 });
     $$('[data-in]', views[name]).forEach((el, i) => spring(el, v => ({
@@ -597,8 +598,10 @@
 
   async function hideAuth() {
     blurActive();
+    auth.classList.add('leaving');
     await spring(auth, v => ({ opacity: clamp(1 - v * 1.2), transform: `scale(${lerp(1, 1.04, v).toFixed(4)})` }), { response: 0.45 });
-    auth.classList.remove('on');
+    auth.classList.remove('on', 'leaving');
+    Object.values(views).forEach(v => { stop(v); v.classList.remove('on'); });
     registerForm.reset();
     $('#regError').textContent = '';
     loginForm.elements.password.value = '';

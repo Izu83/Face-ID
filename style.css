@@ -171,6 +171,9 @@ input[switch] { flex: none; accent-color: var(--green); }
 }
 .view::-webkit-scrollbar { display: none; }
 .view.on { visibility: visible; }
+/* a closed auth layer must never catch touches meant for the app */
+.auth:not(.on), .auth.leaving { pointer-events: none; }
+.auth:not(.on) .view { visibility: hidden; }
 [data-in] { will-change: transform, opacity; }
 
 .welcome-hero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; padding-top: 40px; }
