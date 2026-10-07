@@ -8,6 +8,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Face ID">
 <meta name="theme-color" content="#000000">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
 <title>Face ID</title>
 <style>
   :root { color-scheme: dark; }
@@ -29,28 +32,26 @@
   body { position: fixed; inset: 0; touch-action: manipulation; }
   button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
 
-  /* ---------- Face ID HUD ---------- */
+  /* ---------- Face ID HUD (later becomes the success badge) ---------- */
   .hud {
     position: fixed;
     top: 50%;
     left: 50%;
     width: 156px;
     height: 156px;
+    margin: -78px 0 0 -78px;
     border-radius: 38px;
     display: grid;
     place-items: center;
-    background: rgba(44, 44, 46, 0.92);
-    -webkit-backdrop-filter: blur(40px) saturate(180%);
-    backdrop-filter: blur(40px) saturate(180%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 20px 60px rgba(0, 0, 0, 0.5);
+    background: rgb(44, 44, 46);
     opacity: 0;
     visibility: hidden;
-    transform: translate(-50%, -50%) scale(0.82);
     pointer-events: none;
+    will-change: transform, opacity;
     z-index: 10;
   }
 
-  .glyph { width: 76px; height: 76px; overflow: visible; }
+  .glyph { width: 76px; height: 76px; overflow: visible; will-change: transform; }
   .glyph path { fill: none; stroke: #fff; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
   #check { stroke-dasharray: 1; stroke-dashoffset: 1; }
 
@@ -62,16 +63,21 @@
     flex-direction: column;
     align-items: center;
     padding: max(env(safe-area-inset-top), 20px) 24px calc(max(env(safe-area-inset-bottom), 16px) + 12px);
-    background:
-      radial-gradient(110% 55% at 50% 0%, rgba(48, 209, 88, 0.16), transparent 70%),
-      #000;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.5s ease, visibility 0s linear 0.5s;
+    pointer-events: none;
   }
-  .app.show { opacity: 1; visibility: visible; transition: opacity 0.5s ease; }
+  .app::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(110% 55% at 50% 0%, rgba(48, 209, 88, 0.18), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  .app.show { pointer-events: auto; }
+  .app.show::before { opacity: 1; transition: opacity 1.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
 
   .app-center {
+    position: relative;
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -80,19 +86,29 @@
     gap: 12px;
     text-align: center;
   }
-  .symbol { width: 88px; height: 88px; margin-bottom: 12px; opacity: 0; }
-  .symbol path { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .badge-slot { width: 88px; height: 88px; margin-bottom: 12px; }
   .app h1 { font-size: 34px; font-weight: 700; letter-spacing: 0.01em; }
   .app p { font-size: 17px; color: rgba(235, 235, 245, 0.6); }
-  .app h1, .app p, .app .pill { opacity: 0; }
 
-  .app.show .symbol { animation: symbol-pop 0.75s cubic-bezier(0.2, 0.9, 0.25, 1) 0.05s forwards; }
-  .app.show .symbol path { animation: draw 0.4s cubic-bezier(0.3, 0.8, 0.3, 1) 0.32s forwards; }
-  .app.show h1 { animation: blur-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.18s forwards; }
-  .app.show p { animation: blur-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.26s forwards; }
-  .app.show .pill { animation: blur-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s forwards; }
+  .reveal {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+    filter: blur(10px);
+    transition: opacity 0.25s ease, transform 0.3s ease, filter 0.25s ease;
+    will-change: opacity, transform, filter;
+  }
+  .app.show .reveal {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+    transition:
+      opacity 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) var(--d, 0s),
+      transform 1s cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0s),
+      filter 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) var(--d, 0s);
+  }
 
   .pill {
+    position: relative;
     width: min(100%, 340px);
     height: 52px;
     border-radius: 26px;
@@ -100,21 +116,9 @@
     font-weight: 600;
     background: rgba(255, 255, 255, 0.14);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
-    transition: transform 0.25s cubic-bezier(0.3, 1.4, 0.5, 1), background 0.2s;
   }
-  .pill:active { transform: scale(0.96); background: rgba(255, 255, 255, 0.22); }
-
-  @keyframes symbol-pop {
-    0% { opacity: 0; transform: scale(0.4); }
-    50% { opacity: 1; transform: scale(1.08); }
-    75% { transform: scale(0.98); }
-    100% { opacity: 1; transform: scale(1); }
-  }
-  @keyframes draw { to { stroke-dashoffset: 0; } }
-  @keyframes blur-in {
-    from { opacity: 0; transform: translateY(10px); filter: blur(8px); }
-    to { opacity: 1; transform: none; filter: blur(0); }
-  }
+  .pill:active { background: rgba(255, 255, 255, 0.22); }
+  .app.show .pill:active { transform: scale(0.96); transition: transform 0.2s ease; }
 </style>
 </head>
 <body>
@@ -122,19 +126,16 @@
   <!-- Success screen -->
   <main class="app" id="app" aria-live="polite">
     <div class="app-center">
-      <svg class="symbol" viewBox="0 0 88 88" aria-hidden="true">
-        <circle cx="44" cy="44" r="44" fill="#30d158"/>
-        <path d="M27 45.5 L38.5 57 L61 33" pathLength="1" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <h1>Successful</h1>
-      <p>Face ID verified</p>
+      <div class="badge-slot" id="slot"></div>
+      <h1 class="reveal" style="--d: 0.05s">Successful</h1>
+      <p class="reveal" style="--d: 0.12s">Face ID verified</p>
     </div>
-    <button class="pill" id="again" type="button">Try again</button>
+    <button class="pill reveal" id="again" type="button" style="--d: 0.25s">Try again</button>
   </main>
 
   <!-- Face ID -->
   <div class="hud" id="hud" role="status" aria-label="Face ID">
-    <svg class="glyph" viewBox="0 0 100 100" aria-hidden="true">
+    <svg class="glyph" id="glyph" viewBox="0 0 100 100" aria-hidden="true">
       <g id="corners"><path/><path/><path/><path/></g>
       <g id="face">
         <g id="eyes"><path d="M33 36v8"/><path d="M67 36v8"/></g>
@@ -154,12 +155,15 @@
   const lerp = (a, b, t) => a + (b - a) * t;
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
+  // Everything is drawn once per frame, only when something moved
+  let dirty = true;
+
   // ---------- Spring physics (same model as SwiftUI: response + damping) ----------
+  // Retargeting keeps the current velocity, so chained motions flow into each other.
   class Spring {
-    constructor(value, onChange = () => {}) {
+    constructor(value) {
       this.x = this.target = value;
       this.v = 0;
-      this.onChange = onChange;
       this.raf = 0;
       this.done = null;
     }
@@ -174,37 +178,36 @@
       this.stop();
       this.x = this.target = value;
       this.v = 0;
-      this.onChange(value);
+      dirty = true;
     }
-    to(target, { response = 0.4, damping = 0.85 } = {}) {
+    to(target, { response = 0.5, damping = 1 } = {}) {
       this.stop();
       this.target = target;
       const k = (2 * Math.PI / response) ** 2;
       const c = 4 * Math.PI * damping / response;
-      const eps = Math.max(1e-4, Math.abs(target - this.x) * 2e-4);
+      const eps = Math.max(1e-4, Math.abs(target - this.x) * 1e-4);
       return new Promise(resolve => {
         this.done = resolve;
         let last = performance.now();
         const step = now => {
-          let dt = Math.min(0.064, (now - last) / 1000);
+          let dt = Math.min(0.05, (now - last) / 1000);
           last = now;
           while (dt > 0) {
-            const h = Math.min(1 / 240, dt);
+            const h = Math.min(1 / 480, dt);
             this.v += (-k * (this.x - target) - c * this.v) * h;
             this.x += this.v * h;
             dt -= h;
           }
+          dirty = true;
           if (Math.abs(this.x - target) < eps && Math.abs(this.v) < eps * 10) {
             this.x = target;
             this.v = 0;
-            this.onChange(target);
             this.raf = 0;
             const done = this.done;
             this.done = null;
             if (done) done();
             return;
           }
-          this.onChange(this.x);
           this.raf = requestAnimationFrame(step);
         };
         this.raf = requestAnimationFrame(step);
@@ -212,95 +215,115 @@
     }
   }
 
-  // ---------- Face ID glyph ----------
-  // Each corner bracket is 1 start point + 3 cubic segments, so it can morph
-  // point-for-point into an arc of the spinner ring.
+  // ---------- Face ID glyph geometry ----------
+  // Each corner bracket is 1 start point + 3 cubic segments. Points are kept in
+  // polar form (angle, radius) around the centre, so the brackets curl smoothly
+  // into the arcs of the spinner ring instead of sliding in straight lines.
   const K = 0.5523 * 12;
   const TL = [[8, 30], [8, 26.67], [8, 23.33], [8, 20], [8, 20 - K], [20 - K, 8], [20, 8], [23.33, 8], [26.67, 8], [30, 8]];
-  const BRACKETS = [TL];
-  for (let i = 1; i < 4; i++) BRACKETS.push(BRACKETS[i - 1].map(([x, y]) => [100 - y, x]));
+  const CART = [TL];
+  for (let i = 1; i < 4; i++) CART.push(CART[i - 1].map(([x, y]) => [100 - y, x]));
 
-  function arc(i, sweepDeg, r, rotDeg) {
+  const TAU = Math.PI * 2;
+  const BRACKETS = CART.map((pts, i) => {
+    const mid = (225 + 90 * i) * Math.PI / 180;
+    return pts.map(([x, y]) => {
+      let a = Math.atan2(y - 50, x - 50);
+      while (a < mid - Math.PI) a += TAU;
+      while (a > mid + Math.PI) a -= TAU;
+      return [a, Math.hypot(x - 50, y - 50)];
+    });
+  });
+
+  function arcPolar(i, sweepDeg, r, rotDeg) {
     const mid = (225 + 90 * i + rotDeg) * Math.PI / 180;
     const sweep = sweepDeg * Math.PI / 180;
     const a0 = mid - sweep / 2, d = sweep / 3;
     const k = 4 / 3 * Math.tan(d / 4) * r;
-    const P = a => [50 + r * Math.cos(a), 50 + r * Math.sin(a)];
-    const pts = [P(a0)];
+    const ca = Math.atan2(k, r), cr = Math.hypot(r, k);
+    const pts = [[a0, r]];
     for (let s = 0; s < 3; s++) {
-      const a = a0 + s * d, b = a + d, p0 = P(a), p3 = P(b);
-      pts.push(
-        [p0[0] - k * Math.sin(a), p0[1] + k * Math.cos(a)],
-        [p3[0] + k * Math.sin(b), p3[1] - k * Math.cos(b)],
-        p3
-      );
+      const a = a0 + s * d, b = a + d;
+      pts.push([a + ca, cr], [b - ca, cr], [b, r]);
     }
     return pts;
   }
 
-  const fmt = p => p[0].toFixed(2) + ',' + p[1].toFixed(2);
-  const toPath = p => `M${fmt(p[0])}C${fmt(p[1])} ${fmt(p[2])} ${fmt(p[3])}C${fmt(p[4])} ${fmt(p[5])} ${fmt(p[6])}C${fmt(p[7])} ${fmt(p[8])} ${fmt(p[9])}`;
+  const xy = (a, r) => (50 + r * Math.cos(a)).toFixed(2) + ',' + (50 + r * Math.sin(a)).toFixed(2);
 
-  const hud = $('hud');
-  const app = $('app');
-  const cornersG = $('corners');
-  const cornerEls = [...cornersG.children];
+  // ---------- Elements & animated state ----------
+  const hud = $('hud'), glyph = $('glyph'), app = $('app'), slot = $('slot');
+  const cornersG = $('corners'), cornerEls = [...cornersG.children];
   const faceG = $('face'), eyesG = $('eyes'), nose = $('nose'), check = $('check');
 
-  const g = { m: 0, sweep: 64, r: 36, rot: 0, faceX: 0, faceOut: 0, ringOut: 0, check: 0 };
-  const sp = {};
-  for (const key of ['m', 'sweep', 'faceX', 'faceOut', 'ringOut', 'check']) {
-    sp[key] = new Spring(g[key], x => { g[key] = x; });
+  const s = {
+    pop: new Spring(0),      // HUD appear
+    faceX: new Spring(0),    // head turn
+    faceOut: new Spring(0),  // face fades away
+    m: new Spring(0),        // brackets -> ring
+    sweep: new Spring(64),   // ring arc length
+    omega: new Spring(0),    // spin speed, deg/s
+    ringOut: new Spring(0),  // ring collapses
+    check: new Spring(0),    // checkmark draw
+    morph: new Spring(0),    // HUD -> success badge
+  };
+  let rot = 0;
+  let badgeDy = 0;
+
+  function measureBadge() {
+    const r = slot.getBoundingClientRect();
+    badgeDy = r.top + r.height / 2 - innerHeight / 2;
+    dirty = true;
   }
-  const omega = new Spring(0); // spinner speed, deg/s
+  addEventListener('resize', measureBadge);
 
   function render() {
+    const m = s.m.x, sweep = s.sweep.x;
+
+    // corners / ring
     for (let i = 0; i < 4; i++) {
-      const a = BRACKETS[i], b = arc(i, g.sweep, g.r, g.rot);
-      cornerEls[i].setAttribute('d', toPath(a.map((p, j) => [lerp(p[0], b[j][0], g.m), lerp(p[1], b[j][1], g.m)])));
+      const a = BRACKETS[i], b = arcPolar(i, sweep, 36, rot);
+      const p = a.map((pa, j) => [lerp(pa[0], b[j][0], m), lerp(pa[1], b[j][1], m)]);
+      cornerEls[i].setAttribute('d',
+        `M${xy(...p[0])}C${xy(...p[1])} ${xy(...p[2])} ${xy(...p[3])}C${xy(...p[4])} ${xy(...p[5])} ${xy(...p[6])}C${xy(...p[7])} ${xy(...p[8])} ${xy(...p[9])}`);
     }
-    cornersG.setAttribute('opacity', clamp(1 - g.ringOut));
-    cornersG.setAttribute('transform', `translate(50 50) scale(${1 - 0.45 * g.ringOut}) translate(-50 -50)`);
+    const ro = s.ringOut.x;
+    cornersG.setAttribute('opacity', clamp(1 - ro * 1.3));
+    cornersG.setAttribute('transform', `translate(50 50) scale(${1 - 0.5 * ro}) translate(-50 -50)`);
 
-    const fs = 1 - 0.3 * g.faceOut;
-    faceG.setAttribute('opacity', clamp(1 - g.faceOut));
-    faceG.setAttribute('transform', `translate(50 50) scale(${fs * (1 - 0.06 * Math.abs(g.faceX))} ${fs}) translate(-50 -50) translate(${g.faceX * 4} 0)`);
-    eyesG.setAttribute('transform', `translate(${g.faceX * 2.5} 0)`);
-    nose.setAttribute('transform', `translate(${g.faceX * 4} 0)`);
+    // face
+    const fx = s.faceX.x, fo = s.faceOut.x, fs = 1 - 0.35 * fo;
+    faceG.setAttribute('opacity', clamp(1 - fo * 1.4));
+    faceG.setAttribute('transform', `translate(50 50) scale(${fs * (1 - 0.06 * Math.abs(fx))} ${fs}) translate(-50 -50) translate(${fx * 4} 0)`);
+    eyesG.setAttribute('transform', `translate(${fx * 2.5} 0)`);
+    nose.setAttribute('transform', `translate(${fx * 4.5} 0)`);
 
-    check.style.strokeDashoffset = 1 - clamp(g.check);
-    check.setAttribute('transform', `translate(50 50) scale(${0.7 + 0.3 * g.check}) translate(-50 -50)`);
+    // checkmark
+    const c = s.check.x, k = s.morph.x;
+    check.style.strokeDashoffset = 1 - clamp(c);
+    check.style.strokeWidth = lerp(4.5, 9.5, clamp(k));
+    check.setAttribute('transform', `translate(50 50) scale(${0.75 + 0.25 * c}) translate(-50 -50)`);
+
+    // HUD box -> green success badge
+    const p = s.pop.x, kc = clamp(k);
+    const scale = (0.86 + 0.14 * p) * lerp(1, 88 / 156, k);
+    hud.style.visibility = p < 0.002 ? 'hidden' : 'visible';
+    hud.style.opacity = clamp(p);
+    hud.style.transform = `translate3d(0, ${badgeDy * k}px, 0) scale(${scale})`;
+    hud.style.borderRadius = lerp(38, 78, kc) + 'px';
+    hud.style.backgroundColor = `rgb(${lerp(44, 48, kc) | 0}, ${lerp(44, 209, kc) | 0}, ${lerp(46, 88, kc) | 0})`;
+    glyph.style.transform = `scale(${lerp(1, 1.45, k)})`;
   }
 
-  let ticking = false, lastFrame = 0;
+  let last = performance.now();
   function frame(now) {
-    if (!ticking) return;
-    g.rot = (g.rot + omega.x * (now - lastFrame) / 1000) % 360;
-    lastFrame = now;
-    render();
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (s.omega.x) { rot += s.omega.x * dt; dirty = true; }
+    if (dirty) { dirty = false; render(); }
     requestAnimationFrame(frame);
   }
-  function startTicker() {
-    if (ticking) return;
-    ticking = true;
-    lastFrame = performance.now();
-    requestAnimationFrame(frame);
-  }
-
-  function resetGlyph() {
-    sp.m.set(0); sp.sweep.set(64);
-    sp.faceX.set(0); sp.faceOut.set(0); sp.ringOut.set(0); sp.check.set(0);
-    omega.set(0);
-    g.rot = 0;
-    render();
-  }
-
-  // HUD appear / disappear
-  const pop = new Spring(0, x => {
-    hud.style.visibility = x < 0.002 ? 'hidden' : 'visible';
-    hud.style.opacity = clamp(x);
-    hud.style.transform = `translate(-50%, -50%) scale(${0.82 + 0.18 * x})`;
-  });
+  requestAnimationFrame(frame);
 
   // ---------- Flow ----------
   let busy = false;
@@ -311,49 +334,75 @@
     return true;
   }
 
-  async function runFaceID() {
-    if (busy) return;
-    busy = true;
-    app.classList.remove('show');
-    resetGlyph();
-    startTicker();
+  async function scan() {
+    // A gentle head turn, like the real glyph
+    s.faceX.to(-1, { response: 0.55, damping: 1 });
+    await wait(300);
+    s.faceX.to(1, { response: 0.6, damping: 1 });
+    await wait(430);
+    s.faceX.to(0, { response: 0.5, damping: 1 });
+    await wait(120);
 
-    pop.to(1, { response: 0.42, damping: 0.72 });
-    await wait(380);
-
-    // A small head turn, like the real glyph
-    sp.faceX.to(-1, { response: 0.35, damping: 0.8 });
-    await wait(330);
-    sp.faceX.to(1, { response: 0.4, damping: 0.8 });
-    await wait(380);
-    sp.faceX.to(0, { response: 0.35, damping: 0.9 });
-
-    // Brackets bend into a spinning ring
-    sp.faceOut.to(1, { response: 0.3, damping: 1 });
-    sp.m.to(1, { response: 0.5, damping: 0.8 });
-    omega.to(420, { response: 0.6, damping: 1 });
+    // Brackets curl into a spinning ring
+    s.faceOut.to(1, { response: 0.45, damping: 1 });
+    s.m.to(1, { response: 0.65, damping: 1 });
+    s.omega.to(330, { response: 0.9, damping: 1 });
 
     const ok = await authenticate();
+    if (!ok) return false;
 
-    if (ok) {
-      // Ring closes, then collapses into a check
-      sp.sweep.to(90, { response: 0.3, damping: 1 });
-      await wait(180);
-      sp.ringOut.to(1, { response: 0.35, damping: 1 });
-      sp.check.to(1, { response: 0.4, damping: 0.62 });
-      await wait(850);
-    }
+    // Ring closes, then folds into the check
+    s.sweep.to(90, { response: 0.45, damping: 1 });
+    await wait(170);
+    s.ringOut.to(1, { response: 0.5, damping: 1 });
+    s.check.to(1, { response: 0.55, damping: 0.86 });
+    await wait(300);
+    s.omega.to(0, { response: 0.6, damping: 1 });
+    await wait(400);
 
-    await pop.to(0, { response: 0.38, damping: 1 });
-    ticking = false;
-    if (ok) app.classList.add('show');
+    // The HUD becomes the green badge on the success screen
+    measureBadge();
+    s.morph.to(1, { response: 0.7, damping: 0.86 });
+    await wait(200);
+    app.classList.add('show');
+    return true;
+  }
+
+  async function start() {
+    busy = true;
+    s.pop.to(1, { response: 0.55, damping: 0.82 });
+    await wait(350);
+    await scan();
     busy = false;
   }
 
-  $('again').addEventListener('click', runFaceID);
+  async function again() {
+    if (busy) return;
+    busy = true;
+    app.classList.remove('show');
+    await wait(100);
 
-  resetGlyph();
-  setTimeout(runFaceID, 500);
+    // Badge glides back into the Face ID box
+    s.morph.to(0, { response: 0.65, damping: 0.92 });
+    await wait(380);
+
+    // Check out, face back in
+    s.m.set(0);
+    s.sweep.set(64);
+    rot = 0;
+    s.check.to(0, { response: 0.4, damping: 1 });
+    s.ringOut.to(0, { response: 0.6, damping: 0.95 });
+    s.faceOut.to(0, { response: 0.55, damping: 1 });
+    await wait(520);
+
+    await scan();
+    busy = false;
+  }
+
+  $('again').addEventListener('click', again);
+
+  measureBadge();
+  setTimeout(start, 400);
 })();
 </script>
 </body>
