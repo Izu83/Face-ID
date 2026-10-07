@@ -1,6 +1,6 @@
 {
-  "name": "Face ID",
-  "short_name": "Face ID",
+  "name": "Vault",
+  "short_name": "Vault",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

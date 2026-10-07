@@ -1,27 +1,35 @@
-# Face ID
+# Vault — Face ID banking demo
 
-An iPhone-first web demo: an iOS-style Face ID unlock that opens into a banking app. Hosted on GitHub Pages.
+An iPhone-first web demo: an iOS-style banking app with a Dynamic Island Face ID unlock. Hosted on GitHub Pages.
 
 **Live:** https://izu83.github.io/Face-ID/
 
-## Face ID
+## Features
 
-- A Dynamic Island–style pill drops down from the top and grows into the Face ID square
-- The glyph does a small head turn, then the brackets swirl into a spinning ring
-- The ring closes and folds into a checkmark, then tucks back up into the island
-- Authentication always succeeds for now (`authenticate()` in `index.html`)
+- **Accounts** — create an account or sign in. Accounts live only on the device (`localStorage`);
+  passwords are never stored, only a salted PBKDF2 hash. Optional "Sign in with Face ID".
+- **Face ID** — a Dynamic Island–style pill drops down, scans, and folds back up. Used to unlock,
+  confirm payments and reveal card details. Always succeeds for now (`authenticate()` in `app.js`).
+- **Balance** — calculated from your transactions; digits roll from the old to the new amount.
+- **Send / Request / Top up** — contact picker and custom keypad. Requests get "paid" a few seconds later.
+- **Card** — freeze/unfreeze, reveal details (hidden again after 30 s), four card colours, tap to flip.
+- **Activity** — search, All / Income / Spending filter, grouped by day, transaction details.
+- **Profile** — Face ID on/off, reset demo data, log out, delete account.
+- **Notifications** — the island widens into a banner ("Sent €25.00 to Maria").
+- Locks automatically after a minute in the background.
 
-## Bank app (demo data)
+All animation uses spring curves baked into GPU keyframe animations (transform/opacity only),
+so it runs at full frame rate on iPhone.
 
-- Balance with rolling digits and a hide/show eye button
-- Debit card with a shine sweep; tap it to flip
-- Quick actions, weekly spending bars, recent activity list
-- Tap a transaction for an iOS-style detail sheet (drag down or tap ✕ to close)
-- Lock button returns to Face ID
+On iPhone, use Safari → Share → **Add to Home Screen** to run it fullscreen.
 
-All animation uses spring curves baked into GPU keyframe animations (transform/opacity only), so it runs at full frame rate on iPhone.
+## Files
 
-On iPhone, use Safari → Share → **Add to Home Screen** to run it fullscreen with its own icon.
+- `index.html` — markup
+- `style.css` — styles
+- `app.js` — motion, storage, Face ID island, sheets, auth and bank logic
+
+When changing `style.css` or `app.js`, bump the `?v=` number in `index.html` so phones load the new files.
 
 ## Run locally
 

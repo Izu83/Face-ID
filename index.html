@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -6,339 +6,103 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Face ID">
+<meta name="apple-mobile-web-app-title" content="Vault">
 <meta name="theme-color" content="#000000">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Face ID</title>
-<style>
-  :root {
-    color-scheme: dark;
-    --group: #1c1c1e;
-    --group-2: #2c2c2e;
-    --fill: rgba(120, 120, 128, 0.24);
-    --sep: rgba(84, 84, 88, 0.55);
-    --label-2: rgba(235, 235, 245, 0.6);
-    --label-3: rgba(235, 235, 245, 0.3);
-    --blue: #0a84ff;
-    --green: #30d158;
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-
-  html, body {
-    height: 100%;
-    overflow: hidden;
-    background: linear-gradient(#17171a, #0a0a0b 70%) #0a0a0b;
-    color: #fff;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -webkit-user-select: none;
-    user-select: none;
-    -webkit-touch-callout: none;
-    overscroll-behavior: none;
-  }
-  body { position: fixed; inset: 0; touch-action: manipulation; }
-  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; text-align: inherit; }
-  svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-
-  .probe { position: fixed; padding-top: env(safe-area-inset-top); visibility: hidden; pointer-events: none; }
-
-  /* ================= Face ID island =================
-     Everything that moves is animated with transform/opacity only, so iOS
-     runs it on the GPU at full refresh rate. */
-  .island { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
-
-  /* Rounded shape built from 2 bars + 4 circles: pill -> square stays perfectly round-cornered */
-  .shape { position: absolute; left: 0; top: 0; opacity: 0; }
-  .pc {
-    position: absolute;
-    left: -100px;
-    top: -100px;
-    width: 200px;
-    height: 200px;
-    background: #000;
-    transform: scale(0);
-    will-change: transform;
-  }
-  .pc.c { border-radius: 50%; }
-
-  .glyph {
-    position: absolute;
-    left: -38px;
-    top: -38px;
-    width: 76px;
-    height: 76px;
-    opacity: 0;
-    will-change: transform, opacity;
-  }
-  .layer { position: absolute; inset: 0; width: 76px; height: 76px; overflow: visible; will-change: transform, opacity; }
-  .layer path, .layer circle { fill: none; stroke: #fff; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
-  #ringWrap, #circle, #check { opacity: 0; }
-  #check path { stroke-width: 6.5; }
-
-  /* ================= Bank app ================= */
-  .bank { position: fixed; inset: 0; z-index: 1; opacity: 0; visibility: hidden; background: #000; will-change: transform, opacity; }
-  .bank.on { visibility: visible; }
-  .push { position: absolute; inset: 0; overflow: hidden; background: #000; will-change: transform; }
-  .scroller {
-    position: absolute;
-    inset: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: contain;
-    padding: calc(env(safe-area-inset-top) + 14px) 20px calc(env(safe-area-inset-bottom) + 36px);
-    scrollbar-width: none;
-  }
-  .scroller::-webkit-scrollbar { display: none; }
-  .scroller > * + * { margin-top: 22px; }
-  [data-enter] { will-change: transform, opacity; }
-
-  /* compact nav bar that fades in on scroll */
-  .navbar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: calc(env(safe-area-inset-top) + 48px);
-    padding: env(safe-area-inset-top) 16px 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(18, 18, 20, 0.72);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    backdrop-filter: blur(24px) saturate(180%);
-    border-bottom: 0.5px solid rgba(255, 255, 255, 0.08);
-    font-size: 17px;
-    font-weight: 600;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.25s ease;
-  }
-  .navbar.show { opacity: 1; pointer-events: auto; }
-  .navbar .icon-btn { position: absolute; right: 16px; bottom: 5px; width: 34px; height: 34px; }
-
-  .top { display: flex; align-items: flex-end; justify-content: space-between; }
-  .greet { font-size: 15px; font-weight: 600; color: var(--label-2); }
-  .large { font-size: 34px; font-weight: 700; letter-spacing: 0.01em; line-height: 1.2; }
-
-  .icon-btn {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    background: var(--fill);
-    color: #fff;
-    transition: transform 0.25s cubic-bezier(0.3, 1.4, 0.5, 1), background 0.2s;
-  }
-  .top .icon-btn { margin-bottom: 4px; }
-  .icon-btn svg.i { width: 18px; height: 18px; }
-  .icon-btn:active { transform: scale(0.88); background: rgba(120, 120, 128, 0.4); }
-
-  /* balance */
-  .row-between { display: flex; align-items: center; justify-content: space-between; }
-  .label { font-size: 15px; color: var(--label-2); }
-  .eye { color: var(--label-2); padding: 4px; margin: -4px; }
-  .eye svg.i { width: 20px; height: 20px; }
-  .amount {
-    margin: 2px 0 10px;
-    font-size: 46px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.3em;
-    height: 1.3em;
-    white-space: nowrap;
-    transition: filter 0.35s ease, opacity 0.35s ease;
-  }
-  .roll {
-    display: inline-block;
-    height: 1.3em;
-    overflow: hidden;
-    vertical-align: top;
-    -webkit-mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent);
-    mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent);
-  }
-  .strip { display: block; will-change: transform; }
-  .strip span, .sym { display: block; height: 1.3em; line-height: 1.3em; }
-  .sym { display: inline-block; vertical-align: top; }
-  .delta {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 5px 10px 5px 8px;
-    border-radius: 10px;
-    background: rgba(48, 209, 88, 0.15);
-    color: var(--green);
-    font-size: 14px;
-    font-weight: 600;
-    transition: filter 0.35s ease, opacity 0.35s ease;
-  }
-  .delta svg.i { width: 15px; height: 15px; stroke-width: 2.5; }
-  .masked .amount, .masked .delta { filter: blur(14px); opacity: 0.55; }
-
-  /* card */
-  .card { width: 100%; aspect-ratio: 1.586; perspective: 1400px; cursor: pointer; }
-  .card-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; -webkit-transform-style: preserve-3d; will-change: transform; }
-  .face {
-    position: absolute;
-    inset: 0;
-    border-radius: 20px;
-    overflow: hidden;
-    padding: 20px 22px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-    box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18), 0 18px 40px rgba(0, 0, 0, 0.45);
-  }
-  .front {
-    background:
-      radial-gradient(120% 130% at 0% 0%, #5e5ce6 0%, transparent 55%),
-      radial-gradient(110% 120% at 100% 100%, #ff375f 0%, transparent 52%),
-      radial-gradient(90% 90% at 100% 0%, #0a84ff 0%, transparent 55%),
-      #241f5c;
-  }
-  .back {
-    transform: rotateY(180deg);
-    padding: 0;
-    background: linear-gradient(160deg, #2a2560, #1a1640);
-  }
-  .gloss {
-    position: absolute;
-    top: -20%;
-    bottom: -20%;
-    left: 0;
-    width: 45%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
-    transform: translateX(-120%) skewX(-14deg);
-    pointer-events: none;
-    will-change: transform;
-  }
-  .card-top, .card-bottom { position: relative; display: flex; align-items: center; justify-content: space-between; }
-  .card-name { font-size: 17px; font-weight: 600; }
-  .card-num { font-size: 17px; font-weight: 600; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
-  .card-type { font-size: 15px; font-weight: 800; font-style: italic; letter-spacing: 0.04em; opacity: 0.9; }
-  .chip { position: relative; width: 40px; height: 30px; }
-  .stripe { height: 42px; margin-top: 22px; background: #0b0a1a; }
-  .back-info { padding: 16px 22px; display: grid; grid-template-columns: 1fr auto; row-gap: 12px; column-gap: 16px; font-size: 13px; color: rgba(255, 255, 255, 0.6); }
-  .back-info b { display: block; margin-top: 2px; font-size: 16px; font-weight: 600; color: #fff; font-variant-numeric: tabular-nums; letter-spacing: 0.03em; }
-
-  /* quick actions */
-  .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .action { display: flex; flex-direction: column; align-items: center; gap: 7px; font-size: 13px; color: var(--label-2); }
-  .action-icon {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    background: var(--group-2);
-    color: #fff;
-    transition: transform 0.3s cubic-bezier(0.3, 1.5, 0.5, 1), background 0.2s;
-  }
-  .action:first-child .action-icon { background: var(--blue); }
-  .action:active .action-icon { transform: scale(0.88); }
-
-  /* grouped cards */
-  .group { background: var(--group); border-radius: 22px; }
-  .spend { padding: 16px 18px 14px; }
-  .spend-total { margin-top: 2px; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-  .spend-delta { font-size: 13px; font-weight: 600; color: var(--green); align-self: flex-start; margin-top: 3px; }
-  .bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-top: 16px; }
-  .bar-col { display: flex; flex-direction: column; align-items: center; gap: 7px; }
-  .bar-track { height: 92px; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
-  .bar { width: 100%; max-width: 26px; border-radius: 7px; background: #3a3a3c; transform: scaleY(0); transform-origin: 50% 100%; will-change: transform; }
-  .bar.today { background: var(--blue); }
-  .bar-label { font-size: 12px; font-weight: 500; color: var(--label-3); }
-  .bar-label.today { color: #fff; }
-
-  /* activity list */
-  .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; padding: 0 2px; }
-  .section-head h2 { font-size: 22px; font-weight: 700; }
-  .link { color: var(--blue); font-size: 17px; }
-  .list { overflow: hidden; }
-  .row {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    padding: 11px 16px;
-    transition: background 0.25s ease;
-  }
-  .row:active { background: rgba(255, 255, 255, 0.08); transition: none; }
-  .row + .row::before { content: ""; position: absolute; top: 0; left: 68px; right: 0; height: 0.5px; background: var(--sep); }
-  .tile { flex: none; width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; color: #fff; }
-  .tile svg.i { width: 21px; height: 21px; }
-  .row-text { flex: 1; min-width: 0; }
-  .row-name { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .row-sub { margin-top: 1px; font-size: 13px; color: var(--label-2); }
-  .row-amt { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .in { color: var(--green); }
-
-  /* ================= Sheet ================= */
-  .dim { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, 0.5); opacity: 0; visibility: hidden; will-change: opacity; }
-  .sheet {
-    position: fixed;
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
-    z-index: 21;
-    padding: 8px 20px calc(max(env(safe-area-inset-bottom), 16px) + 4px);
-    border-radius: 36px;
-    background: #1c1c1e;
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.35);
-    transform: translateY(120%);
-    visibility: hidden;
-    touch-action: none;
-    will-change: transform;
-  }
-  .grabber { width: 36px; height: 5px; border-radius: 3px; margin: 0 auto 4px; background: rgba(235, 235, 245, 0.3); }
-  .close {
-    position: absolute;
-    top: 14px;
-    right: 14px;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    background: var(--fill);
-    color: var(--label-2);
-    transition: transform 0.25s cubic-bezier(0.3, 1.4, 0.5, 1);
-  }
-  .close:active { transform: scale(0.88); }
-  .close svg.i { width: 14px; height: 14px; stroke-width: 2.6; }
-  .sheet-head { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 18px 0 20px; }
-  .sheet-head .tile { width: 60px; height: 60px; border-radius: 16px; }
-  .sheet-head .tile svg.i { width: 30px; height: 30px; }
-  .sheet-name { margin-top: 12px; font-size: 20px; font-weight: 600; }
-  .sheet-amt { margin-top: 4px; font-size: 40px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-  .status { margin-top: 8px; display: inline-flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 600; color: var(--green); }
-  .status svg.i { width: 15px; height: 15px; stroke-width: 2.6; }
-  .info { background: var(--group-2); border-radius: 16px; }
-  .info-row { position: relative; display: flex; justify-content: space-between; gap: 12px; padding: 13px 16px; font-size: 16px; }
-  .info-row + .info-row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 0.5px; background: var(--sep); }
-  .info-row span:first-child { color: var(--label-2); }
-  .info-row span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
-</style>
+<link rel="stylesheet" href="style.css?v=8">
+<title>Vault</title>
 </head>
 <body>
   <div class="probe" id="probe"></div>
 
-  <!-- ================= Bank app ================= -->
+  <!-- ================= Auth ================= -->
+  <div class="auth" id="auth">
+    <div class="orb a"></div>
+    <div class="orb b"></div>
+
+    <section class="view" id="vWelcome">
+      <div class="welcome-hero">
+        <div class="app-icon" data-in>
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <path d="M8 30V20A12 12 0 0 1 20 8H30M70 8H80A12 12 0 0 1 92 20V30M92 70V80A12 12 0 0 1 80 92H70M30 92H20A12 12 0 0 1 8 80V70M33 36v8M67 36v8M51 36v19q0 5-5 5h-2M35 70q15 10 30 0"/>
+          </svg>
+        </div>
+        <div class="brand" data-in>Vault</div>
+        <p class="tagline" data-in>Banking that knows your face. Send, request and track your money in seconds.</p>
+      </div>
+      <div class="welcome-actions" data-in>
+        <button class="btn primary" type="button" data-go="register"><span>Create account</span></button>
+        <button class="btn glass" type="button" data-go="login"><span>Sign in</span></button>
+      </div>
+      <p class="fine" data-in>Demo app Â· Accounts and data are stored only on this device.</p>
+    </section>
+
+    <section class="view" id="vRegister">
+      <div class="nav-row">
+        <button class="nav-back" type="button" data-back="welcome">
+          <svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Back
+        </button>
+      </div>
+      <h1 data-in>Create account</h1>
+      <p class="sub" data-in>It takes less than a minute.</p>
+      <form class="form" id="registerForm" novalidate data-in>
+        <div class="field-group">
+          <label class="field"><span>Name</span><input name="fullname" autocomplete="name" placeholder="Your name" autocapitalize="words" enterkeyhint="next"></label>
+          <label class="field"><span>Email</span><input name="email" type="email" autocomplete="email" placeholder="you@example.com" autocapitalize="off" enterkeyhint="next"></label>
+          <label class="field"><span>Password</span><input name="password" type="password" autocomplete="new-password" placeholder="At least 6 characters" enterkeyhint="next"></label>
+          <label class="field"><span>Confirm</span><input name="confirm" type="password" autocomplete="new-password" placeholder="Repeat password" enterkeyhint="go"></label>
+        </div>
+        <label class="toggle-row">
+          <span>Use Face ID<small>Unlock and confirm payments</small></span>
+          <input type="checkbox" name="faceid" class="sw" checked>
+        </label>
+        <p class="form-error" id="regError"></p>
+        <button class="btn blue" type="submit"><span>Create account</span></button>
+      </form>
+      <p class="alt" data-in>Already have an account? <button type="button" data-go="login" data-replace>Sign in</button></p>
+    </section>
+
+    <section class="view" id="vLogin">
+      <div class="nav-row">
+        <button class="nav-back" type="button" data-back="welcome">
+          <svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Back
+        </button>
+      </div>
+      <h1 data-in>Welcome back</h1>
+      <p class="sub" data-in>Sign in to your account.</p>
+      <div class="face-login" id="faceLogin" data-in>
+        <button class="btn glass" type="button" id="faceLoginBtn">
+          <span class="fl-icon">
+            <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M8 30V20A12 12 0 0 1 20 8H30M70 8H80A12 12 0 0 1 92 20V30M92 70V80A12 12 0 0 1 80 92H70M30 92H20A12 12 0 0 1 8 80V70M33 36v8M67 36v8M51 36v19q0 5-5 5h-2M35 70q15 10 30 0"/></svg>
+          </span>
+          <span>Sign in with Face ID<small id="faceLoginName"></small></span>
+        </button>
+        <div class="or">or use your password</div>
+      </div>
+      <form class="form" id="loginForm" novalidate data-in>
+        <div class="field-group">
+          <label class="field"><span>Email</span><input name="email" type="email" autocomplete="username" placeholder="you@example.com" autocapitalize="off" enterkeyhint="next"></label>
+          <label class="field"><span>Password</span><input name="password" type="password" autocomplete="current-password" placeholder="Password" enterkeyhint="go"></label>
+        </div>
+        <p class="form-error" id="loginError"></p>
+        <button class="btn blue" type="submit"><span>Sign in</span></button>
+      </form>
+      <p class="alt" data-in>New here? <button type="button" data-go="register" data-replace>Create an account</button></p>
+    </section>
+  </div>
+
+  <!-- ================= Bank ================= -->
   <div class="bank" id="bank">
     <div class="push" id="push">
       <div class="scroller" id="scroller">
 
         <header class="top" data-enter>
-          <div>
-            <div class="greet" id="greet">Good evening</div>
-            <h1 class="large">Accounts</h1>
+          <button class="avatar" id="avatarBtn" type="button" aria-label="Profile"></button>
+          <div class="who">
+            <div class="greet" id="greet"></div>
+            <div class="name" id="hello"></div>
           </div>
           <button class="icon-btn lock-btn" type="button" aria-label="Lock">
             <svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
@@ -349,49 +113,22 @@
           <div class="row-between">
             <span class="label">Total balance</span>
             <button class="eye" id="eye" type="button" aria-label="Hide balance">
-              <svg class="i" viewBox="0 0 24 24" id="eyeIcon"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="i" viewBox="0 0 24 24" id="eyeIcon"></svg>
             </button>
           </div>
-          <div class="amount" id="amount" aria-label="Balance"></div>
-          <div class="delta">
-            <svg class="i" viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8"/></svg>
-            <span id="delta"></span>
-          </div>
+          <div class="amount" id="amount"></div>
+          <div class="delta" id="delta"></div>
         </section>
 
         <section data-enter>
-          <div class="card" id="card" role="button" aria-label="Flip card">
-            <div class="card-inner" id="cardInner">
-              <div class="face front">
-                <div class="gloss" id="gloss"></div>
-                <div class="card-top">
-                  <span class="card-name">Everyday</span>
-                  <svg class="i" viewBox="0 0 24 24" style="width:24px;height:24px;opacity:.9"><path d="M8.5 8.5a5 5 0 0 1 0 7M12 6a8.5 8.5 0 0 1 0 12M15.5 3.5a12 12 0 0 1 0 17"/></svg>
-                </div>
-                <svg class="chip" viewBox="0 0 40 30"><rect x="0.5" y="0.5" width="39" height="29" rx="6" fill="#e9d8a6" stroke="#c9b27a"/><path d="M0.5 10.5h12M0.5 19.5h12M27.5 10.5h12M27.5 19.5h12M12.5 0.5v29M27.5 0.5v29" stroke="#b59a5c" fill="none"/></svg>
-                <div class="card-bottom">
-                  <span class="card-num">•••• 4821</span>
-                  <span class="card-type">DEBIT</span>
-                </div>
-              </div>
-              <div class="face back">
-                <div class="stripe"></div>
-                <div class="back-info">
-                  <div>Card number<b>•••• •••• •••• 4821</b></div>
-                  <div>CVV<b>•••</b></div>
-                  <div>Card holder<b>Demo User</b></div>
-                  <div>Expires<b>08/29</b></div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <div class="card" id="card" role="button" aria-label="Flip card"></div>
         </section>
 
         <section class="actions" data-enter>
-          <button class="action" type="button"><span class="action-icon"><svg class="i" viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8"/></svg></span>Send</button>
-          <button class="action" type="button"><span class="action-icon"><svg class="i" viewBox="0 0 24 24"><path d="M17 7L7 17M15 17H7V9"/></svg></span>Request</button>
-          <button class="action" type="button"><span class="action-icon"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>Top up</button>
-          <button class="action" type="button"><span class="action-icon"><svg class="i" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="18.5" cy="12" r="1.2" fill="currentColor"/></svg></span>More</button>
+          <button class="action" type="button" data-act="send"><span class="action-icon"><svg class="i" viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8"/></svg></span>Send</button>
+          <button class="action" type="button" data-act="request"><span class="action-icon"><svg class="i" viewBox="0 0 24 24"><path d="M17 7L7 17M15 17H7V9"/></svg></span>Request</button>
+          <button class="action" type="button" data-act="topup"><span class="action-icon"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>Top up</button>
+          <button class="action" type="button" data-act="card"><span class="action-icon"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18M7 15h4"/></svg></span>Card</button>
         </section>
 
         <section class="group spend" data-enter>
@@ -400,7 +137,7 @@
               <div class="label">Spent this week</div>
               <div class="spend-total" id="spendTotal"></div>
             </div>
-            <div class="spend-delta">↓ 12% vs last week</div>
+            <div class="spend-delta" id="spendDelta"></div>
           </div>
           <div class="bars" id="bars"></div>
         </section>
@@ -408,15 +145,15 @@
         <section data-enter>
           <div class="section-head">
             <h2>Recent activity</h2>
-            <button class="link" type="button">See all</button>
+            <button class="link" type="button" id="seeAll">See all</button>
           </div>
-          <div class="group list" id="list"></div>
+          <div class="group list" id="recent"></div>
         </section>
 
       </div>
 
       <div class="navbar" id="navbar">
-        Accounts
+        <span id="navTitle"></span>
         <button class="icon-btn lock-btn" type="button" aria-label="Lock">
           <svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
         </button>
@@ -424,18 +161,21 @@
     </div>
   </div>
 
-  <!-- ================= Transaction sheet ================= -->
+  <!-- ================= Sheet ================= -->
   <div class="dim" id="dim"></div>
-  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Transaction">
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true">
     <div class="grabber"></div>
     <button class="close" id="sheetClose" type="button" aria-label="Close">
       <svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
-    <div id="sheetBody"></div>
+    <div class="sheet-content" id="sheetContent"></div>
   </div>
 
-  <!-- ================= Face ID ================= -->
-  <div class="island" role="status" aria-label="Face ID">
+  <!-- ================= Alert ================= -->
+  <div class="alert-wrap" id="alertWrap"><div class="alert" id="alert" role="alertdialog"></div></div>
+
+  <!-- ================= Face ID island ================= -->
+  <div class="island" role="status" aria-live="polite">
     <div class="shape" id="shape"></div>
     <div class="glyph" id="glyph" aria-hidden="true">
       <svg class="layer" id="corners" viewBox="0 0 100 100">
@@ -455,452 +195,9 @@
       <svg class="layer" id="circle" viewBox="0 0 100 100"><circle cx="50" cy="50" r="36"/></svg>
       <svg class="layer" id="check" viewBox="0 0 100 100"><path d="M27 52 L43 67 L74 34"/></svg>
     </div>
+    <div class="banner" id="banner"></div>
   </div>
 
-<script>
-(() => {
-  'use strict';
-
-  const $ = id => document.getElementById(id);
-  const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
-  const lerp = (a, b, t) => a + (b - a) * t;
-  const wait = ms => new Promise(r => setTimeout(r, ms));
-
-  // ================= Springs, pre-baked into GPU keyframes =================
-  // The spring curve (SwiftUI-style response + damping, optional start velocity)
-  // is sampled once and handed to the browser as a keyframe animation, so
-  // nothing runs per frame in JS.
-  const curves = new Map();
-  function springCurve(response, damping, v0 = 0) {
-    const key = `${response}/${damping}/${v0.toFixed(1)}`;
-    if (curves.has(key)) return curves.get(key);
-    const w0 = 2 * Math.PI / response;
-    let f;
-    if (damping < 1) {
-      const a = damping * w0, wd = w0 * Math.sqrt(1 - damping * damping);
-      f = t => 1 - Math.exp(-a * t) * (Math.cos(wd * t) + (a - v0) / wd * Math.sin(wd * t));
-    } else {
-      f = t => 1 - Math.exp(-w0 * t) * (1 + (w0 - v0) * t);
-    }
-    let dur = 0;
-    for (let t = 0; t < 4; t += 1 / 240) if (Math.abs(1 - f(t)) > 0.0015) dur = t;
-    dur += 1 / 60;
-    const n = Math.max(16, Math.ceil(dur * 90));
-    const samples = [];
-    for (let i = 0; i <= n; i++) samples.push(i === n ? 1 : f(i / n * dur));
-    const c = { dur: dur * 1000, samples };
-    curves.set(key, c);
-    return c;
-  }
-
-  function play(el, keyframes, options) {
-    const a = el.animate(keyframes, { fill: 'both', easing: 'linear', ...options });
-    if (el._anim) el._anim.cancel();
-    el._anim = a;
-    return a.finished.catch(() => {});
-  }
-
-  function stop(el) {
-    if (el._anim) { el._anim.cancel(); el._anim = null; }
-  }
-
-  // Animate el along a spring; frame(v) maps progress (0 -> 1, may overshoot) to styles
-  function spring(el, frame, { response = 0.5, damping = 1, delay = 0, velocity = 0 } = {}) {
-    const { dur, samples } = springCurve(response, damping, velocity);
-    const n = samples.length - 1;
-    return play(el, samples.map((v, i) => ({ offset: i / n, ...frame(v) })), { duration: dur, delay });
-  }
-
-  // ================= Face ID island =================
-  const shape = $('shape');
-  shape.innerHTML = '<div class="pc"></div><div class="pc"></div>' + '<div class="pc c"></div>'.repeat(4);
-  const pieces = [...shape.children];
-
-  let islandTop = 11;
-  function measure() {
-    // Line up with the hardware Dynamic Island when running from the Home Screen
-    const inset = parseFloat(getComputedStyle($('probe')).paddingTop) || 0;
-    islandTop = inset >= 60 ? 14 : 11;
-  }
-
-  const PILL = () => ({ w: 126, h: 37, r: 18.5, y: islandTop + 18.5 });
-  const BOX = () => ({ w: 160, h: 160, r: 44, y: islandTop + 80 });
-  const mix = (a, b, t) => ({ w: lerp(a.w, b.w, t), h: lerp(a.h, b.h, t), r: lerp(a.r, b.r, t), y: lerp(a.y, b.y, t) });
-
-  // Transforms for the 6 pieces of a rounded rect (w, h, corner r) centred at (cx, y)
-  function pieceTransforms({ w, h, r, y }) {
-    const cx = innerWidth / 2;
-    const dx = w / 2 - r, dy = h / 2 - r, cs = (2 * r) / 200;
-    const t = (x, yy, sx, sy) => `translate(${x.toFixed(2)}px, ${yy.toFixed(2)}px) scale(${Math.max(1e-4, sx).toFixed(4)}, ${Math.max(1e-4, sy).toFixed(4)})`;
-    return [
-      t(cx, y, w / 200, (h - 2 * r) / 200),
-      t(cx, y, (w - 2 * r) / 200, h / 200),
-      t(cx - dx, y - dy, cs, cs),
-      t(cx + dx, y - dy, cs, cs),
-      t(cx - dx, y + dy, cs, cs),
-      t(cx + dx, y + dy, cs, cs),
-    ];
-  }
-
-  function morphShape(from, to, opts) {
-    pieces.forEach((el, i) => spring(el, v => ({ transform: pieceTransforms(mix(from, to, v))[i] }), opts));
-  }
-
-  const glyph = $('glyph');
-  const glyphAt = (y, scale) => `translate(${(innerWidth / 2).toFixed(2)}px, ${y.toFixed(2)}px) scale(${scale.toFixed(4)})`;
-
-  // Spinner ring: 4 arcs in the same spots as the corner brackets
-  (() => {
-    const R = 36, sweep = 64;
-    let d = '';
-    for (let i = 0; i < 4; i++) {
-      const mid = 225 + 90 * i;
-      const a0 = (mid - sweep / 2) * Math.PI / 180, a1 = (mid + sweep / 2) * Math.PI / 180;
-      d += `M${(50 + R * Math.cos(a0)).toFixed(2)} ${(50 + R * Math.sin(a0)).toFixed(2)}` +
-           `A${R} ${R} 0 0 1 ${(50 + R * Math.cos(a1)).toFixed(2)} ${(50 + R * Math.sin(a1)).toFixed(2)}`;
-    }
-    $('ring').innerHTML = `<path d="${d}"/>`;
-  })();
-
-  const corners = $('corners'), face = $('face'), eyes = $('eyes'), nose = $('nose');
-  const ringWrap = $('ringWrap'), ring = $('ring'), circle = $('circle'), check = $('check');
-
-  function resetGlyph() {
-    [corners, face, eyes, nose, ringWrap, circle, check].forEach(stop);
-    ring.getAnimations().forEach(a => a.cancel());
-  }
-
-  // Demo: authentication always succeeds for now
-  async function authenticate() {
-    await wait(1100);
-    return true;
-  }
-
-  // Pill drops out of the island and grows into the Face ID square
-  async function dropDown() {
-    const A = PILL(), B = BOX();
-    play(shape, [{ opacity: 0 }, { opacity: 1 }], { duration: 120 });
-    const opts = { response: 0.6, damping: 0.76 };
-    morphShape(A, B, opts);
-    spring(glyph, v => ({
-      transform: glyphAt(lerp(A.y, B.y, v), lerp(0.55, 1, v)),
-      opacity: clamp((v - 0.35) / 0.45),
-    }), opts);
-    await wait(520);
-  }
-
-  async function scan() {
-    // A gentle head turn, like the real glyph
-    const ease = 'cubic-bezier(0.45, 0, 0.55, 1)';
-    const look = (amp, squish) => [
-      { offset: 0, transform: 'translateX(0px) scaleX(1)', easing: ease },
-      { offset: 0.32, transform: `translateX(${-amp}px) scaleX(${squish})`, easing: ease },
-      { offset: 0.72, transform: `translateX(${amp}px) scaleX(${squish})`, easing: ease },
-      { offset: 1, transform: 'translateX(0px) scaleX(1)' },
-    ];
-    play(face, look(2.6, 0.95), { duration: 1000 });
-    play(eyes, look(1.8, 1), { duration: 1000 });
-    await play(nose, look(2.8, 1), { duration: 1000 });
-
-    // Brackets swirl away as the spinning ring fades in
-    spring(face, v => ({ transform: `translateX(0px) scaleX(1) scale(${lerp(1, 0.6, v)})`, opacity: clamp(1 - v * 1.4) }), { response: 0.45 });
-    spring(corners, v => ({ transform: `rotate(${(95 * v).toFixed(2)}deg) scale(${lerp(1, 0.8, v)})`, opacity: clamp(1 - v * 1.25) }), { response: 0.55 });
-    spring(ringWrap, v => ({ transform: `rotate(${lerp(-110, 0, v).toFixed(2)}deg) scale(${lerp(1.22, 1, v)})`, opacity: clamp(v * 1.5) }), { response: 0.6 });
-    ring.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }], { duration: 950, iterations: Infinity });
-
-    const ok = await authenticate();
-    if (!ok) return false;
-
-    // Ring closes into a full circle, then folds into the check
-    spring(circle, v => ({ opacity: v }), { response: 0.22 });
-    await spring(ringWrap, v => ({ transform: 'rotate(0deg) scale(1)', opacity: 1 - v }), { response: 0.22 });
-    spring(circle, v => ({ transform: `scale(${lerp(1, 0.5, v)})`, opacity: clamp(1 - v * 1.3) }), { response: 0.45 });
-    spring(check, v => ({ transform: `scale(${lerp(0.35, 1, v)})`, opacity: clamp(v * 2) }), { response: 0.5, damping: 0.62 });
-    await wait(600);
-    ring.getAnimations().forEach(a => a.cancel());
-    return true;
-  }
-
-  // Square folds back up into the island while the app comes in underneath
-  async function tuckAway() {
-    const A = PILL(), B = BOX();
-    const opts = { response: 0.55, damping: 1 };
-    morphShape(B, A, opts);
-    spring(glyph, v => ({ transform: glyphAt(lerp(B.y, A.y, v), lerp(1, 0.45, v)), opacity: clamp(1 - v * 1.8) }), opts);
-    spring(shape, v => ({ opacity: 1 - v }), { response: 0.3, delay: 380 });
-    await wait(140);
-  }
-
-  // ================= Bank data (demo) =================
-  const eur = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' });
-  const money = (n, sign) => (sign ? (n > 0 ? '+' : '−') : '') + eur.format(Math.abs(n));
-
-  const ICONS = {
-    cup: '<path d="M5 8h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 9.5h1.5a2.5 2.5 0 0 1 0 5H16M8.5 3.5v2M12 3.5v2"/>',
-    cart: '<path d="M3 4h2.2l2.1 10.1a1.6 1.6 0 0 0 1.6 1.3h7.8a1.6 1.6 0 0 0 1.6-1.2L20 7.5H6.1"/><circle cx="9.5" cy="19.5" r="1.2"/><circle cx="17" cy="19.5" r="1.2"/>',
-    income: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
-    car: '<path d="M5 17v-4.5L7 7h10l2 5.5V17M5 17h14M4 12.5h16"/><circle cx="8" cy="14.8" r=".6"/><circle cx="16" cy="14.8" r=".6"/><path d="M6.5 17v2M17.5 17v2"/>',
-    play: '<path d="M8.5 6.2v11.6a.8.8 0 0 0 1.2.7l9.4-5.8a.8.8 0 0 0 0-1.4L9.7 5.5a.8.8 0 0 0-1.2.7z"/>',
-    person: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>',
-    bolt: '<path d="M13 2.5L5 13.5h6.5L10.5 21.5 19 10h-6.5z"/>',
-    bag: '<path d="M5.5 8h13l-1 12.5h-11z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/>',
-  };
-  const svgIcon = name => `<svg class="i" viewBox="0 0 24 24">${ICONS[name]}</svg>`;
-
-  const day = n => {
-    const d = new Date();
-    d.setDate(d.getDate() - n);
-    return n === 0 ? 'Today' : n === 1 ? 'Yesterday' : d.toLocaleDateString('en-GB', { weekday: 'long' });
-  };
-
-  const TX = [
-    { name: 'Coffee House', cat: 'Food & Drink', icon: 'cup', color: '#ff9f0a', amount: -4.8, when: [0, '09:14'] },
-    { name: 'FreshMart', cat: 'Groceries', icon: 'cart', color: '#30d158', amount: -62.35, when: [0, '08:02'] },
-    { name: 'Salary', cat: 'Income', icon: 'income', color: '#0a84ff', amount: 2850, when: [1, '06:00'] },
-    { name: 'City Taxi', cat: 'Transport', icon: 'car', color: '#d4a20a', amount: -14.2, when: [1, '22:41'] },
-    { name: 'Streamly', cat: 'Subscriptions', icon: 'play', color: '#ff375f', amount: -11.99, when: [2, '12:00'] },
-    { name: 'Alex P.', cat: 'Transfer', icon: 'person', color: '#bf5af2', amount: 40, when: [3, '18:27'] },
-    { name: 'Power & Light', cat: 'Utilities', icon: 'bolt', color: '#32ade6', amount: -78.4, when: [4, '10:05'] },
-    { name: 'Urban Store', cat: 'Shopping', icon: 'bag', color: '#ff6482', amount: -129, when: [5, '16:52'] },
-  ];
-
-  const BALANCE = 12480.56;
-  const WEEK = [38.5, 72.1, 24.9, 55.3, 91.75, 41.2, 18.35]; // Mon..Sun
-
-  // ---------- greeting ----------
-  const h = new Date().getHours();
-  $('greet').textContent = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-
-  // ---------- balance with rolling digits ----------
-  const amountEl = $('amount');
-  const strips = [];
-  for (const ch of money(BALANCE)) {
-    if (/\d/.test(ch)) {
-      const roll = document.createElement('span');
-      roll.className = 'roll';
-      roll.innerHTML = '<span class="strip">' + '0123456789'.split('').map(d => `<span>${d}</span>`).join('') + '</span>';
-      amountEl.appendChild(roll);
-      strips.push({ el: roll.firstChild, d: +ch });
-    } else {
-      const s = document.createElement('span');
-      s.className = 'sym';
-      s.textContent = ch;
-      amountEl.appendChild(s);
-    }
-  }
-  amountEl.setAttribute('aria-label', money(BALANCE));
-  $('delta').textContent = money(1240.18, true) + ' this month';
-
-  function rollDigits(delay) {
-    strips.forEach(({ el, d }, i) => {
-      spring(el, v => ({ transform: `translateY(${(-lerp(0, d, v) * 1.3).toFixed(3)}em)` }), { response: 0.85, damping: 0.86, delay: delay + i * 40 });
-    });
-  }
-
-  $('eye').addEventListener('click', () => {
-    const masked = $('balance').classList.toggle('masked');
-    $('eyeIcon').innerHTML = masked
-      ? '<path d="M3 3l18 18M10.6 5.1A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2"/>'
-      : '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>';
-  });
-
-  // ---------- weekly bars ----------
-  $('spendTotal').textContent = eur.format(WEEK.reduce((a, b) => a + b, 0));
-  const todayIdx = (new Date().getDay() + 6) % 7;
-  const maxWeek = Math.max(...WEEK);
-  const bars = [];
-  $('bars').innerHTML = WEEK.map((v, i) => `
-    <div class="bar-col">
-      <div class="bar-track"><div class="bar${i === todayIdx ? ' today' : ''}" style="height:${Math.round(14 + (v / maxWeek) * 78)}px"></div></div>
-      <div class="bar-label${i === todayIdx ? ' today' : ''}">${'MTWTFSS'[i]}</div>
-    </div>`).join('');
-  bars.push(...$('bars').querySelectorAll('.bar'));
-
-  // ---------- activity list ----------
-  $('list').innerHTML = TX.map((t, i) => `
-    <button class="row" type="button" data-enter data-tx="${i}">
-      <span class="tile" style="background:${t.color}">${svgIcon(t.icon)}</span>
-      <span class="row-text">
-        <div class="row-name">${t.name}</div>
-        <div class="row-sub">${t.cat} · ${day(t.when[0])}</div>
-      </span>
-      <span class="row-amt${t.amount > 0 ? ' in' : ''}">${money(t.amount, true)}</span>
-    </button>`).join('');
-
-  // ---------- card flip ----------
-  const cardInner = $('cardInner');
-  let flipped = false;
-  $('card').addEventListener('click', () => {
-    const from = flipped ? 180 : 0;
-    flipped = !flipped;
-    const to = flipped ? 180 : 0;
-    spring(cardInner, v => ({ transform: `rotateY(${lerp(from, to, v).toFixed(2)}deg)` }), { response: 0.6, damping: 0.78 });
-  });
-
-  // ---------- compact nav bar ----------
-  const scroller = $('scroller'), navbar = $('navbar');
-  scroller.addEventListener('scroll', () => navbar.classList.toggle('show', scroller.scrollTop > 56), { passive: true });
-
-  // ================= App enter / exit =================
-  const bank = $('bank');
-  const enterEls = [...document.querySelectorAll('[data-enter]')];
-
-  function enterBank() {
-    bank.classList.add('on');
-    spring(bank, v => ({ opacity: clamp(v * 1.3), transform: `scale(${lerp(0.965, 1, v).toFixed(4)})` }), { response: 0.7 });
-    enterEls.forEach((el, i) => spring(el, v => ({
-      opacity: clamp(v * 1.3),
-      transform: `translateY(${lerp(28, 0, v).toFixed(2)}px)`,
-    }), { response: 0.7, damping: 0.86, delay: 40 + i * 45 }));
-    rollDigits(200);
-    bars.forEach((b, i) => spring(b, v => ({ transform: `scaleY(${v.toFixed(4)})` }), { response: 0.75, damping: 0.72, delay: 420 + i * 45 }));
-    play($('gloss'), [
-      { transform: 'translateX(-120%) skewX(-14deg)' },
-      { transform: 'translateX(260%) skewX(-14deg)' },
-    ], { duration: 1400, delay: 650, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' });
-  }
-
-  async function exitBank() {
-    await spring(bank, v => ({ opacity: clamp(1 - v * 1.3), transform: `scale(${lerp(1, 0.96, v).toFixed(4)})` }), { response: 0.45 });
-    bank.classList.remove('on');
-    scroller.scrollTop = 0;
-    navbar.classList.remove('show');
-    stop(cardInner);
-    flipped = false;
-  }
-
-  // ================= Transaction sheet =================
-  const sheet = $('sheet'), dim = $('dim'), push = $('push');
-  let sheetH = 0, sheetOpen = false, drag = null;
-
-  function sheetFrame(y) {
-    const p = clamp(1 - y / sheetH);
-    return {
-      sheet: { transform: `translateY(${y.toFixed(2)}px)` },
-      dim: { opacity: p },
-      push: { transform: `translateY(${(p * 10).toFixed(2)}px) scale(${(1 - 0.07 * p).toFixed(4)})` },
-    };
-  }
-
-  function moveSheet(fromY, toY, velocityPx = 0) {
-    const dist = toY - fromY;
-    const velocity = dist ? clamp(velocityPx / dist, -25, 25) : 0;
-    const opts = { response: 0.5, damping: toY === 0 ? 0.86 : 1, velocity };
-    const at = v => sheetFrame(lerp(fromY, toY, v));
-    spring(dim, v => at(v).dim, opts);
-    spring(push, v => at(v).push, opts);
-    return spring(sheet, v => at(v).sheet, opts);
-  }
-
-  function openSheet(t) {
-    const [n, time] = t.when;
-    const d = new Date();
-    d.setDate(d.getDate() - n);
-    const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
-    $('sheetBody').innerHTML = `
-      <div class="sheet-head">
-        <span class="tile" style="background:${t.color}">${svgIcon(t.icon)}</span>
-        <div class="sheet-name">${t.name}</div>
-        <div class="sheet-amt${t.amount > 0 ? ' in' : ''}">${money(t.amount, true)}</div>
-        <div class="status"><svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Completed</div>
-      </div>
-      <div class="info">
-        <div class="info-row"><span>Date</span><span>${date}, ${time}</span></div>
-        <div class="info-row"><span>Category</span><span>${t.cat}</span></div>
-        <div class="info-row"><span>Card</span><span>Everyday •••• 4821</span></div>
-        <div class="info-row"><span>Reference</span><span>TX-${(48210 + t.name.length * 977).toString(36).toUpperCase()}</span></div>
-      </div>`;
-    sheet.style.visibility = dim.style.visibility = 'visible';
-    push.style.borderRadius = '16px';
-    sheetH = sheet.offsetHeight + 16;
-    sheetOpen = true;
-    moveSheet(sheetH, 0);
-  }
-
-  async function closeSheet(fromY = 0, velocityPx = 0) {
-    sheetOpen = false;
-    await moveSheet(fromY, sheetH, velocityPx);
-    if (sheetOpen) return;
-    sheet.style.visibility = dim.style.visibility = 'hidden';
-    push.style.borderRadius = '';
-  }
-
-  const currentY = () => new DOMMatrix(getComputedStyle(sheet).transform).m42;
-
-  $('list').addEventListener('click', e => {
-    const row = e.target.closest('[data-tx]');
-    if (row && !sheetOpen) openSheet(TX[+row.dataset.tx]);
-  });
-  $('sheetClose').addEventListener('click', () => sheetOpen && closeSheet(currentY()));
-  dim.addEventListener('click', () => sheetOpen && closeSheet(currentY()));
-
-  // Drag the sheet down to dismiss (follows the finger, keeps the flick velocity)
-  sheet.addEventListener('pointerdown', e => {
-    if (!sheetOpen || e.target.closest('button')) return;
-    const y = currentY();
-    [sheet, dim, push].forEach(stop);
-    const f = sheetFrame(y);
-    sheet.style.transform = f.sheet.transform;
-    dim.style.opacity = f.dim.opacity;
-    push.style.transform = f.push.transform;
-    drag = { startY: e.clientY, y0: y, y, lastY: e.clientY, lastT: e.timeStamp, v: 0 };
-    sheet.setPointerCapture(e.pointerId);
-  });
-  sheet.addEventListener('pointermove', e => {
-    if (!drag) return;
-    let y = drag.y0 + (e.clientY - drag.startY);
-    if (y < 0) y *= 0.25; // rubber band upwards
-    const dt = (e.timeStamp - drag.lastT) / 1000;
-    if (dt > 0) drag.v = 0.8 * ((e.clientY - drag.lastY) / dt) + 0.2 * drag.v;
-    drag.lastY = e.clientY;
-    drag.lastT = e.timeStamp;
-    drag.y = y;
-    const f = sheetFrame(y);
-    sheet.style.transform = f.sheet.transform;
-    dim.style.opacity = f.dim.opacity;
-    push.style.transform = f.push.transform;
-  });
-  const endDrag = () => {
-    if (!drag) return;
-    const { y, v } = drag;
-    drag = null;
-    if (y > sheetH * 0.3 || v > 700) closeSheet(y, v);
-    else moveSheet(y, 0, v);
-  };
-  sheet.addEventListener('pointerup', endDrag);
-  sheet.addEventListener('pointercancel', endDrag);
-
-  // ================= Flow =================
-  let busy = false;
-
-  async function unlock() {
-    busy = true;
-    measure();
-    await dropDown();
-    const ok = await scan();
-    if (ok) {
-      await tuckAway();
-      enterBank();
-    }
-    busy = false;
-  }
-
-  async function lock() {
-    if (busy) return;
-    busy = true;
-    if (sheetOpen) await closeSheet(currentY());
-    await exitBank();
-    resetGlyph();
-    await wait(150);
-    busy = false;
-    unlock();
-  }
-
-  document.querySelectorAll('.lock-btn').forEach(b => b.addEventListener('click', lock));
-  addEventListener('resize', measure);
-
-  setTimeout(unlock, 450);
-})();
-</script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>
