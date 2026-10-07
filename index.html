@@ -34,26 +34,40 @@
 
   .probe { position: fixed; padding-top: env(safe-area-inset-top); visibility: hidden; pointer-events: none; }
 
-  /* ---------- Face ID island (grows from the top, later becomes the success badge) ---------- */
-  .hud {
-    position: fixed;
-    top: 0;
-    left: 50%;
-    width: 126px;
-    height: 37px;
-    border-radius: 18.5px;
-    overflow: hidden;
-    background: #000;
-    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
-    visibility: hidden;
-    pointer-events: none;
-    will-change: transform, width, height;
-    z-index: 10;
-  }
+  /* ---------- Face ID island ----------
+     Every moving part here is animated with transform/opacity only, so iOS
+     runs it on the GPU at full refresh rate. */
+  .island { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
 
-  .glyph { position: absolute; top: 50%; left: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; overflow: visible; opacity: 0; will-change: transform, opacity; }
-  .glyph path { fill: none; stroke: #fff; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
-  #check { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  /* The rounded shape is built from 2 bars + 4 circles. Scaling these keeps a
+     perfect rounded rectangle at every size: pill -> square -> badge. */
+  .shape { position: absolute; left: 0; top: 0; opacity: 0; }
+  .pc {
+    position: absolute;
+    left: -100px;
+    top: -100px;
+    width: 200px;
+    height: 200px;
+    background: #000;
+    transform: scale(0);
+    will-change: transform;
+  }
+  .pc.c { border-radius: 50%; }
+  .shape.green .pc { background: #30d158; }
+
+  .glyph {
+    position: absolute;
+    left: -38px;
+    top: -38px;
+    width: 76px;
+    height: 76px;
+    opacity: 0;
+    will-change: transform, opacity;
+  }
+  .layer { position: absolute; inset: 0; width: 76px; height: 76px; overflow: visible; will-change: transform, opacity; }
+  .layer path, .layer circle { fill: none; stroke: #fff; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+  #ringWrap, #circle, #check { opacity: 0; }
+  #check path { stroke-width: 6.5; }
 
   /* ---------- Success screen ---------- */
   .app {
@@ -135,16 +149,28 @@
   </main>
 
   <!-- Face ID -->
-  <div class="hud" id="hud" role="status" aria-label="Face ID">
-    <svg class="glyph" id="glyph" viewBox="0 0 100 100" aria-hidden="true">
-      <g id="corners"><path/><path/><path/><path/></g>
-      <g id="face">
-        <g id="eyes"><path d="M33 36v8"/><path d="M67 36v8"/></g>
-        <path id="nose" d="M51 36v19q0 5-5 5h-2"/>
-        <path d="M35 70q15 10 30 0"/>
-      </g>
-      <path id="check" d="M26 52 L43 68 L75 33" pathLength="1"/>
-    </svg>
+  <div class="island" role="status" aria-label="Face ID">
+    <div class="shape" id="shapeBlack"></div>
+    <div class="shape green" id="shapeGreen"></div>
+
+    <div class="glyph" id="glyph" aria-hidden="true">
+      <svg class="layer" id="corners" viewBox="0 0 100 100">
+        <path d="M8 30V20A12 12 0 0 1 20 8H30"/>
+        <path d="M70 8H80A12 12 0 0 1 92 20V30"/>
+        <path d="M92 70V80A12 12 0 0 1 80 92H70"/>
+        <path d="M30 92H20A12 12 0 0 1 8 80V70"/>
+      </svg>
+      <div class="layer" id="face">
+        <svg class="layer" id="eyes" viewBox="0 0 100 100"><path d="M33 36v8M67 36v8"/></svg>
+        <svg class="layer" id="nose" viewBox="0 0 100 100"><path d="M51 36v19q0 5-5 5h-2"/></svg>
+        <svg class="layer" viewBox="0 0 100 100"><path d="M35 70q15 10 30 0"/></svg>
+      </div>
+      <div class="layer" id="ringWrap">
+        <svg class="layer" id="ring" viewBox="0 0 100 100"></svg>
+      </div>
+      <svg class="layer" id="circle" viewBox="0 0 100 100"><circle cx="50" cy="50" r="36"/></svg>
+      <svg class="layer" id="check" viewBox="0 0 100 100"><path d="M27 52 L43 67 L74 34"/></svg>
+    </div>
   </div>
 
 <script>
@@ -156,188 +182,111 @@
   const lerp = (a, b, t) => a + (b - a) * t;
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
-  // Everything is drawn once per frame, only when something moved
-  let dirty = true;
-
-  // ---------- Spring physics (same model as SwiftUI: response + damping) ----------
-  // Retargeting keeps the current velocity, so chained motions flow into each other.
-  class Spring {
-    constructor(value) {
-      this.x = this.target = value;
-      this.v = 0;
-      this.raf = 0;
-      this.done = null;
+  // ---------- Springs, pre-baked into GPU keyframes ----------
+  // The spring curve (SwiftUI-style response + damping) is sampled once and handed
+  // to the browser as a keyframe animation, so nothing runs per frame in JS.
+  const curves = new Map();
+  function springCurve(response, damping) {
+    const key = response + '/' + damping;
+    if (curves.has(key)) return curves.get(key);
+    const w0 = 2 * Math.PI / response;
+    let f;
+    if (damping < 1) {
+      const wd = w0 * Math.sqrt(1 - damping * damping);
+      f = t => 1 - Math.exp(-damping * w0 * t) * (Math.cos(wd * t) + damping * w0 / wd * Math.sin(wd * t));
+    } else {
+      f = t => 1 - Math.exp(-w0 * t) * (1 + w0 * t);
     }
-    stop() {
-      cancelAnimationFrame(this.raf);
-      this.raf = 0;
-      const done = this.done;
-      this.done = null;
-      if (done) done();
-    }
-    set(value) {
-      this.stop();
-      this.x = this.target = value;
-      this.v = 0;
-      dirty = true;
-    }
-    to(target, { response = 0.5, damping = 1 } = {}) {
-      this.stop();
-      this.target = target;
-      const k = (2 * Math.PI / response) ** 2;
-      const c = 4 * Math.PI * damping / response;
-      const eps = Math.max(1e-4, Math.abs(target - this.x) * 1e-4);
-      return new Promise(resolve => {
-        this.done = resolve;
-        let last = performance.now();
-        const step = now => {
-          let dt = Math.min(0.05, (now - last) / 1000);
-          last = now;
-          while (dt > 0) {
-            const h = Math.min(1 / 480, dt);
-            this.v += (-k * (this.x - target) - c * this.v) * h;
-            this.x += this.v * h;
-            dt -= h;
-          }
-          dirty = true;
-          if (Math.abs(this.x - target) < eps && Math.abs(this.v) < eps * 10) {
-            this.x = target;
-            this.v = 0;
-            this.raf = 0;
-            const done = this.done;
-            this.done = null;
-            if (done) done();
-            return;
-          }
-          this.raf = requestAnimationFrame(step);
-        };
-        this.raf = requestAnimationFrame(step);
-      });
-    }
+    let dur = 0;
+    for (let t = 0; t < 4; t += 1 / 240) if (Math.abs(1 - f(t)) > 0.0015) dur = t;
+    dur += 1 / 60;
+    const n = Math.max(16, Math.ceil(dur * 90));
+    const samples = [];
+    for (let i = 0; i <= n; i++) samples.push(i === n ? 1 : f(i / n * dur));
+    const c = { dur: dur * 1000, samples };
+    curves.set(key, c);
+    return c;
   }
 
-  // ---------- Face ID glyph geometry ----------
-  // Each corner bracket is 1 start point + 3 cubic segments. Points are kept in
-  // polar form (angle, radius) around the centre, so the brackets curl smoothly
-  // into the arcs of the spinner ring instead of sliding in straight lines.
-  const K = 0.5523 * 12;
-  const TL = [[8, 30], [8, 26.67], [8, 23.33], [8, 20], [8, 20 - K], [20 - K, 8], [20, 8], [23.33, 8], [26.67, 8], [30, 8]];
-  const CART = [TL];
-  for (let i = 1; i < 4; i++) CART.push(CART[i - 1].map(([x, y]) => [100 - y, x]));
-
-  const TAU = Math.PI * 2;
-  const BRACKETS = CART.map((pts, i) => {
-    const mid = (225 + 90 * i) * Math.PI / 180;
-    return pts.map(([x, y]) => {
-      let a = Math.atan2(y - 50, x - 50);
-      while (a < mid - Math.PI) a += TAU;
-      while (a > mid + Math.PI) a -= TAU;
-      return [a, Math.hypot(x - 50, y - 50)];
-    });
-  });
-
-  function arcPolar(i, sweepDeg, r, rotDeg) {
-    const mid = (225 + 90 * i + rotDeg) * Math.PI / 180;
-    const sweep = sweepDeg * Math.PI / 180;
-    const a0 = mid - sweep / 2, d = sweep / 3;
-    const k = 4 / 3 * Math.tan(d / 4) * r;
-    const ca = Math.atan2(k, r), cr = Math.hypot(r, k);
-    const pts = [[a0, r]];
-    for (let s = 0; s < 3; s++) {
-      const a = a0 + s * d, b = a + d;
-      pts.push([a + ca, cr], [b - ca, cr], [b, r]);
-    }
-    return pts;
+  function play(el, keyframes, options) {
+    const a = el.animate(keyframes, { fill: 'both', easing: 'linear', ...options });
+    if (el._anim) el._anim.cancel();
+    el._anim = a;
+    return a.finished.catch(() => {});
   }
 
-  const xy = (a, r) => (50 + r * Math.cos(a)).toFixed(2) + ',' + (50 + r * Math.sin(a)).toFixed(2);
+  // Animate el along a spring; frame(v) maps progress (0 -> 1, may overshoot) to styles
+  function spring(el, frame, { response = 0.5, damping = 1, delay = 0 } = {}) {
+    const { dur, samples } = springCurve(response, damping);
+    const n = samples.length - 1;
+    return play(el, samples.map((v, i) => ({ offset: i / n, ...frame(v) })), { duration: dur, delay });
+  }
 
-  // ---------- Elements & animated state ----------
-  const hud = $('hud'), glyph = $('glyph'), app = $('app'), slot = $('slot');
-  const cornersG = $('corners'), cornerEls = [...cornersG.children];
-  const faceG = $('face'), eyesG = $('eyes'), nose = $('nose'), check = $('check');
+  // ---------- Island geometry ----------
+  const shapeBlack = $('shapeBlack'), shapeGreen = $('shapeGreen');
+  for (const shape of [shapeBlack, shapeGreen]) {
+    shape.innerHTML = '<div class="pc"></div><div class="pc"></div>' + '<div class="pc c"></div>'.repeat(4);
+  }
+  const piecesBlack = [...shapeBlack.children], piecesGreen = [...shapeGreen.children];
 
-  const s = {
-    pop: new Spring(0),      // HUD appear
-    faceX: new Spring(0),    // head turn
-    faceOut: new Spring(0),  // face fades away
-    m: new Spring(0),        // brackets -> ring
-    sweep: new Spring(64),   // ring arc length
-    omega: new Spring(0),    // spin speed, deg/s
-    ringOut: new Spring(0),  // ring collapses
-    check: new Spring(0),    // checkmark draw
-    morph: new Spring(0),    // HUD -> success badge
-  };
-  let rot = 0;
-  let islandTop = 11, badgeY = 0;
-
+  let islandTop = 11, badgeY = 400;
   function measure() {
     // Line up with the hardware Dynamic Island when running from the Home Screen
     const inset = parseFloat(getComputedStyle($('probe')).paddingTop) || 0;
     islandTop = inset >= 60 ? 14 : 11;
-    const r = slot.getBoundingClientRect();
+    const r = $('slot').getBoundingClientRect();
     badgeY = r.top + r.height / 2;
-    dirty = true;
   }
-  addEventListener('resize', measure);
 
-  function render() {
-    const m = s.m.x, sweep = s.sweep.x;
+  const PILL = () => ({ w: 126, h: 37, r: 18.5, y: islandTop + 18.5 });
+  const BOX = () => ({ w: 160, h: 160, r: 44, y: islandTop + 80 });
+  const BADGE = () => ({ w: 88, h: 88, r: 44, y: badgeY });
+  const mix = (a, b, t) => ({ w: lerp(a.w, b.w, t), h: lerp(a.h, b.h, t), r: lerp(a.r, b.r, t), y: lerp(a.y, b.y, t) });
 
-    // corners / ring
-    for (let i = 0; i < 4; i++) {
-      const a = BRACKETS[i], b = arcPolar(i, sweep, 36, rot);
-      const p = a.map((pa, j) => [lerp(pa[0], b[j][0], m), lerp(pa[1], b[j][1], m)]);
-      cornerEls[i].setAttribute('d',
-        `M${xy(...p[0])}C${xy(...p[1])} ${xy(...p[2])} ${xy(...p[3])}C${xy(...p[4])} ${xy(...p[5])} ${xy(...p[6])}C${xy(...p[7])} ${xy(...p[8])} ${xy(...p[9])}`);
+  // Transforms for the 6 pieces of a rounded rect (w, h, corner r) centred at (cx, y)
+  function pieceTransforms({ w, h, r, y }) {
+    const cx = innerWidth / 2;
+    const dx = w / 2 - r, dy = h / 2 - r, cs = (2 * r) / 200;
+    const t = (x, yy, sx, sy) => `translate(${x.toFixed(2)}px, ${yy.toFixed(2)}px) scale(${Math.max(1e-4, sx).toFixed(4)}, ${Math.max(1e-4, sy).toFixed(4)})`;
+    return [
+      t(cx, y, w / 200, (h - 2 * r) / 200),
+      t(cx, y, (w - 2 * r) / 200, h / 200),
+      t(cx - dx, y - dy, cs, cs),
+      t(cx + dx, y - dy, cs, cs),
+      t(cx - dx, y + dy, cs, cs),
+      t(cx + dx, y + dy, cs, cs),
+    ];
+  }
+
+  function morphShape(from, to, opts) {
+    for (let i = 0; i < 6; i++) {
+      const f = v => ({ transform: pieceTransforms(mix(from, to, v))[i] });
+      spring(piecesBlack[i], f, opts);
+      spring(piecesGreen[i], f, opts);
     }
-    const ro = s.ringOut.x;
-    cornersG.setAttribute('opacity', clamp(1 - ro * 1.3));
-    cornersG.setAttribute('transform', `translate(50 50) scale(${1 - 0.5 * ro}) translate(-50 -50)`);
-
-    // face
-    const fx = s.faceX.x, fo = s.faceOut.x, fs = 1 - 0.35 * fo;
-    faceG.setAttribute('opacity', clamp(1 - fo * 1.4));
-    faceG.setAttribute('transform', `translate(50 50) scale(${fs * (1 - 0.06 * Math.abs(fx))} ${fs}) translate(-50 -50) translate(${fx * 4} 0)`);
-    eyesG.setAttribute('transform', `translate(${fx * 2.5} 0)`);
-    nose.setAttribute('transform', `translate(${fx * 4.5} 0)`);
-
-    // checkmark
-    const c = s.check.x, k = s.morph.x;
-    check.style.strokeDashoffset = 1 - clamp(c);
-    check.style.strokeWidth = lerp(4.5, 9.5, clamp(k));
-    check.setAttribute('transform', `translate(50 50) scale(${0.75 + 0.25 * c}) translate(-50 -50)`);
-
-    // Island pill (126x37) grows down into the Face ID square (160x160)...
-    const p = s.pop.x, kc = clamp(k);
-    const bw = lerp(126, 160, p), bh = lerp(37, 160, p);
-    const br = lerp(18.5, 46, p);
-    // ...which later glides down into the 88px green success badge
-    const w = lerp(bw, 88, k), h = lerp(bh, 88, k);
-    const cy = lerp(islandTop + bh / 2, badgeY, k);
-    hud.style.visibility = p < 0.01 && k < 0.01 ? 'hidden' : 'visible';
-    hud.style.width = w + 'px';
-    hud.style.height = h + 'px';
-    hud.style.borderRadius = Math.min(lerp(br, 44, kc), h / 2) + 'px';
-    hud.style.transform = `translate3d(${-w / 2}px, ${cy - h / 2}px, 0)`;
-    hud.style.backgroundColor = `rgb(${lerp(0, 48, kc) | 0}, ${lerp(0, 209, kc) | 0}, ${lerp(0, 88, kc) | 0})`;
-
-    const gp = clamp((p - 0.35) / 0.5);
-    glyph.style.opacity = gp;
-    glyph.style.transform = `translate3d(0, ${(1 - gp) * -18}px, 0) scale(${lerp(0.7, 1, gp) * lerp(1, 0.82, k)})`;
   }
 
-  let last = performance.now();
-  function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
-    if (s.omega.x) { rot += s.omega.x * dt; dirty = true; }
-    if (dirty) { dirty = false; render(); }
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
+  // Glyph follows the shape's centre
+  const glyph = $('glyph');
+  const glyphAt = (y, scale) => `translate(${(innerWidth / 2).toFixed(2)}px, ${y.toFixed(2)}px) scale(${scale.toFixed(4)})`;
+
+  // ---------- Spinner ring: 4 arcs, same spots as the corner brackets ----------
+  (() => {
+    const R = 36, sweep = 64;
+    let d = '';
+    for (let i = 0; i < 4; i++) {
+      const mid = 225 + 90 * i;
+      const a0 = (mid - sweep / 2) * Math.PI / 180, a1 = (mid + sweep / 2) * Math.PI / 180;
+      d += `M${(50 + R * Math.cos(a0)).toFixed(2)} ${(50 + R * Math.sin(a0)).toFixed(2)}` +
+           `A${R} ${R} 0 0 1 ${(50 + R * Math.cos(a1)).toFixed(2)} ${(50 + R * Math.sin(a1)).toFixed(2)}`;
+    }
+    $('ring').innerHTML = `<path d="${d}"/>`;
+  })();
 
   // ---------- Flow ----------
+  const app = $('app');
+  const corners = $('corners'), face = $('face'), eyes = $('eyes'), nose = $('nose');
+  const ringWrap = $('ringWrap'), ring = $('ring'), circle = $('circle'), check = $('check');
   let busy = false;
 
   // Demo: authentication always succeeds for now
@@ -346,57 +295,72 @@
     return true;
   }
 
+  function resetGlyph() {
+    for (const el of [corners, face, eyes, nose, ringWrap, ring, circle, check]) {
+      if (el._anim) { el._anim.cancel(); el._anim = null; }
+    }
+    ring.getAnimations().forEach(a => a.cancel());
+  }
+
+  async function dropDown(fadeIn) {
+    const A = PILL(), B = BOX();
+    if (fadeIn) play(shapeBlack, [{ opacity: 0 }, { opacity: 1 }], { duration: 120 });
+    const opts = { response: 0.6, damping: 0.76 };
+    morphShape(A, B, opts);
+    spring(glyph, v => ({
+      transform: glyphAt(lerp(A.y, B.y, v), lerp(0.55, 1, v)),
+      opacity: clamp((v - 0.35) / 0.45),
+    }), opts);
+    await wait(520);
+  }
+
   async function scan() {
     // A gentle head turn, like the real glyph
-    s.faceX.to(-1, { response: 0.55, damping: 1 });
-    await wait(300);
-    s.faceX.to(1, { response: 0.6, damping: 1 });
-    await wait(430);
-    s.faceX.to(0, { response: 0.5, damping: 1 });
-    await wait(120);
+    const ease = 'cubic-bezier(0.45, 0, 0.55, 1)';
+    const look = (amp, squish) => [
+      { offset: 0, transform: 'translateX(0px) scaleX(1)', easing: ease },
+      { offset: 0.32, transform: `translateX(${-amp}px) scaleX(${squish})`, easing: ease },
+      { offset: 0.72, transform: `translateX(${amp}px) scaleX(${squish})`, easing: ease },
+      { offset: 1, transform: 'translateX(0px) scaleX(1)' },
+    ];
+    play(face, look(2.6, 0.95), { duration: 1000 });
+    play(eyes, look(1.8, 1), { duration: 1000 });
+    await play(nose, look(2.8, 1), { duration: 1000 });
 
-    // Brackets curl into a spinning ring
-    s.faceOut.to(1, { response: 0.45, damping: 1 });
-    s.m.to(1, { response: 0.65, damping: 1 });
-    s.omega.to(330, { response: 0.9, damping: 1 });
+    // Brackets swirl away as the spinning ring fades in
+    spring(face, v => ({ transform: `translateX(0px) scaleX(1) scale(${lerp(1, 0.6, v)})`, opacity: clamp(1 - v * 1.4) }), { response: 0.45 });
+    spring(corners, v => ({ transform: `rotate(${(95 * v).toFixed(2)}deg) scale(${lerp(1, 0.8, v)})`, opacity: clamp(1 - v * 1.25) }), { response: 0.55 });
+    spring(ringWrap, v => ({ transform: `rotate(${lerp(-110, 0, v).toFixed(2)}deg) scale(${lerp(1.22, 1, v)})`, opacity: clamp(v * 1.5) }), { response: 0.6 });
+    ring.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }], { duration: 950, iterations: Infinity });
 
     const ok = await authenticate();
     if (!ok) return false;
 
-    // Ring closes, then folds into the check
-    s.sweep.to(90, { response: 0.45, damping: 1 });
-    await wait(170);
-    s.ringOut.to(1, { response: 0.5, damping: 1 });
-    s.check.to(1, { response: 0.55, damping: 0.86 });
-    await wait(300);
-    s.omega.to(0, { response: 0.6, damping: 1 });
-    await wait(400);
+    // Ring closes into a full circle, then folds into the check
+    spring(circle, v => ({ opacity: v }), { response: 0.22 });
+    await spring(ringWrap, v => ({ transform: 'rotate(0deg) scale(1)', opacity: 1 - v }), { response: 0.22 });
+    spring(circle, v => ({ transform: `scale(${lerp(1, 0.5, v)})`, opacity: clamp(1 - v * 1.3) }), { response: 0.45 });
+    spring(check, v => ({ transform: `scale(${lerp(0.35, 1, v)})`, opacity: clamp(v * 2) }), { response: 0.5, damping: 0.62 });
+    await wait(700);
+    ring.getAnimations().forEach(a => a.cancel());
 
-    // The island glides down and becomes the green badge on the success screen
+    // The island glides down and becomes the green badge
     measure();
-    s.morph.to(1, { response: 0.75, damping: 0.88 });
+    const B = BOX(), C = BADGE();
+    const opts = { response: 0.75, damping: 0.86 };
+    morphShape(B, C, opts);
+    spring(shapeGreen, v => ({ opacity: clamp(v * 1.2) }), { response: 0.6 });
+    spring(glyph, v => ({ transform: glyphAt(lerp(B.y, C.y, v), 1), opacity: 1 }), opts);
     await wait(260);
     app.classList.add('show');
     return true;
   }
 
-  function resetGlyph() {
-    for (const k of ['faceX', 'faceOut', 'm', 'omega', 'ringOut', 'check']) s[k].set(0);
-    s.sweep.set(64);
-    rot = 0;
-  }
-
-  // Drop down out of the island, then scan
-  async function popAndScan() {
-    s.pop.to(1, { response: 0.6, damping: 0.78 });
-    await wait(480);
-    await scan();
-  }
-
   async function start() {
     busy = true;
     measure();
-    await popAndScan();
+    await dropDown(true);
+    await scan();
     busy = false;
   }
 
@@ -407,17 +371,21 @@
     await wait(80);
 
     // Badge flies back up and tucks into the island
-    s.morph.to(0, { response: 0.6, damping: 1 });
-    s.pop.to(0, { response: 0.6, damping: 1 });
-    await wait(650);
+    const A = PILL(), C = BADGE();
+    const opts = { response: 0.6, damping: 1 };
+    morphShape(C, A, opts);
+    spring(shapeGreen, v => ({ opacity: clamp(1 - v * 1.5) }), opts);
+    await spring(glyph, v => ({ transform: glyphAt(lerp(C.y, A.y, v), lerp(1, 0.5, v)), opacity: clamp(1 - v * 2) }), opts);
 
     resetGlyph();
-    await wait(120);
-    await popAndScan();
+    await wait(100);
+    await dropDown();
+    await scan();
     busy = false;
   }
 
   $('again').addEventListener('click', again);
+  addEventListener('resize', measure);
 
   setTimeout(start, 450);
 })();
