@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Face ID">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#17171a">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
@@ -20,7 +20,7 @@
   html, body {
     height: 100%;
     overflow: hidden;
-    background: #000;
+    background: linear-gradient(#17171a, #0a0a0b 70%) #0a0a0b;
     color: #fff;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -32,26 +32,26 @@
   body { position: fixed; inset: 0; touch-action: manipulation; }
   button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
 
-  /* ---------- Face ID HUD (later becomes the success badge) ---------- */
+  .probe { position: fixed; padding-top: env(safe-area-inset-top); visibility: hidden; pointer-events: none; }
+
+  /* ---------- Face ID island (grows from the top, later becomes the success badge) ---------- */
   .hud {
     position: fixed;
-    top: 50%;
+    top: 0;
     left: 50%;
-    width: 156px;
-    height: 156px;
-    margin: -78px 0 0 -78px;
-    border-radius: 38px;
-    display: grid;
-    place-items: center;
-    background: rgb(44, 44, 46);
-    opacity: 0;
+    width: 126px;
+    height: 37px;
+    border-radius: 18.5px;
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
     visibility: hidden;
     pointer-events: none;
-    will-change: transform, opacity;
+    will-change: transform, width, height;
     z-index: 10;
   }
 
-  .glyph { width: 76px; height: 76px; overflow: visible; will-change: transform; }
+  .glyph { position: absolute; top: 50%; left: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; overflow: visible; opacity: 0; will-change: transform, opacity; }
   .glyph path { fill: none; stroke: #fff; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
   #check { stroke-dasharray: 1; stroke-dashoffset: 1; }
 
@@ -122,6 +122,7 @@
 </style>
 </head>
 <body>
+  <div class="probe" id="probe"></div>
 
   <!-- Success screen -->
   <main class="app" id="app" aria-live="polite">
@@ -268,14 +269,17 @@
     morph: new Spring(0),    // HUD -> success badge
   };
   let rot = 0;
-  let badgeDy = 0;
+  let islandTop = 11, badgeY = 0;
 
-  function measureBadge() {
+  function measure() {
+    // Line up with the hardware Dynamic Island when running from the Home Screen
+    const inset = parseFloat(getComputedStyle($('probe')).paddingTop) || 0;
+    islandTop = inset >= 60 ? 14 : 11;
     const r = slot.getBoundingClientRect();
-    badgeDy = r.top + r.height / 2 - innerHeight / 2;
+    badgeY = r.top + r.height / 2;
     dirty = true;
   }
-  addEventListener('resize', measureBadge);
+  addEventListener('resize', measure);
 
   function render() {
     const m = s.m.x, sweep = s.sweep.x;
@@ -304,15 +308,23 @@
     check.style.strokeWidth = lerp(4.5, 9.5, clamp(k));
     check.setAttribute('transform', `translate(50 50) scale(${0.75 + 0.25 * c}) translate(-50 -50)`);
 
-    // HUD box -> green success badge
+    // Island pill (126x37) grows down into the Face ID square (160x160)...
     const p = s.pop.x, kc = clamp(k);
-    const scale = (0.86 + 0.14 * p) * lerp(1, 88 / 156, k);
-    hud.style.visibility = p < 0.002 ? 'hidden' : 'visible';
-    hud.style.opacity = clamp(p);
-    hud.style.transform = `translate3d(0, ${badgeDy * k}px, 0) scale(${scale})`;
-    hud.style.borderRadius = lerp(38, 78, kc) + 'px';
-    hud.style.backgroundColor = `rgb(${lerp(44, 48, kc) | 0}, ${lerp(44, 209, kc) | 0}, ${lerp(46, 88, kc) | 0})`;
-    glyph.style.transform = `scale(${lerp(1, 1.45, k)})`;
+    const bw = lerp(126, 160, p), bh = lerp(37, 160, p);
+    const br = lerp(18.5, 46, p);
+    // ...which later glides down into the 88px green success badge
+    const w = lerp(bw, 88, k), h = lerp(bh, 88, k);
+    const cy = lerp(islandTop + bh / 2, badgeY, k);
+    hud.style.visibility = p < 0.01 && k < 0.01 ? 'hidden' : 'visible';
+    hud.style.width = w + 'px';
+    hud.style.height = h + 'px';
+    hud.style.borderRadius = Math.min(lerp(br, 44, kc), h / 2) + 'px';
+    hud.style.transform = `translate3d(${-w / 2}px, ${cy - h / 2}px, 0)`;
+    hud.style.backgroundColor = `rgb(${lerp(0, 48, kc) | 0}, ${lerp(0, 209, kc) | 0}, ${lerp(0, 88, kc) | 0})`;
+
+    const gp = clamp((p - 0.35) / 0.5);
+    glyph.style.opacity = gp;
+    glyph.style.transform = `translate3d(0, ${(1 - gp) * -18}px, 0) scale(${lerp(0.7, 1, gp) * lerp(1, 0.82, k)})`;
   }
 
   let last = performance.now();
@@ -360,19 +372,31 @@
     s.omega.to(0, { response: 0.6, damping: 1 });
     await wait(400);
 
-    // The HUD becomes the green badge on the success screen
-    measureBadge();
-    s.morph.to(1, { response: 0.7, damping: 0.86 });
-    await wait(200);
+    // The island glides down and becomes the green badge on the success screen
+    measure();
+    s.morph.to(1, { response: 0.75, damping: 0.88 });
+    await wait(260);
     app.classList.add('show');
     return true;
   }
 
+  function resetGlyph() {
+    for (const k of ['faceX', 'faceOut', 'm', 'omega', 'ringOut', 'check']) s[k].set(0);
+    s.sweep.set(64);
+    rot = 0;
+  }
+
+  // Drop down out of the island, then scan
+  async function popAndScan() {
+    s.pop.to(1, { response: 0.6, damping: 0.78 });
+    await wait(480);
+    await scan();
+  }
+
   async function start() {
     busy = true;
-    s.pop.to(1, { response: 0.55, damping: 0.82 });
-    await wait(350);
-    await scan();
+    measure();
+    await popAndScan();
     busy = false;
   }
 
@@ -380,29 +404,22 @@
     if (busy) return;
     busy = true;
     app.classList.remove('show');
-    await wait(100);
+    await wait(80);
 
-    // Badge glides back into the Face ID box
-    s.morph.to(0, { response: 0.65, damping: 0.92 });
-    await wait(380);
+    // Badge flies back up and tucks into the island
+    s.morph.to(0, { response: 0.6, damping: 1 });
+    s.pop.to(0, { response: 0.6, damping: 1 });
+    await wait(650);
 
-    // Check out, face back in
-    s.m.set(0);
-    s.sweep.set(64);
-    rot = 0;
-    s.check.to(0, { response: 0.4, damping: 1 });
-    s.ringOut.to(0, { response: 0.6, damping: 0.95 });
-    s.faceOut.to(0, { response: 0.55, damping: 1 });
-    await wait(520);
-
-    await scan();
+    resetGlyph();
+    await wait(120);
+    await popAndScan();
     busy = false;
   }
 
   $('again').addEventListener('click', again);
 
-  measureBadge();
-  setTimeout(start, 400);
+  setTimeout(start, 450);
 })();
 </script>
 </body>

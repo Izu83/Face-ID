@@ -6,7 +6,8 @@ An iPhone-first web demo of the iOS Face ID animation, hosted on GitHub Pages.
 
 ## Demo
 
-- Face ID glyph pops in and does a small head turn
+- A Dynamic Island–style pill drops down from the top and grows into the Face ID square
+- The Face ID glyph does a small head turn
 - The corner brackets bend into a spinning ring while it "scans"
 - The ring closes and collapses into a checkmark
 - The Face ID box turns into the green badge and glides into the **Successful** screen
